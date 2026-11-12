@@ -29,12 +29,12 @@ export function AppShell() {
             to="/"
             className="flex items-center gap-2.5 text-lg font-bold tracking-tight text-[var(--text-primary)]"
           >
-            <span
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[var(--accent-primary)] text-sm font-bold text-white"
+            <img
+              src="/icon-192.png"
+              alt=""
+              className="h-8 w-8 rounded-[8px] object-cover"
               aria-hidden="true"
-            >
-              ح
-            </span>
+            />
             <span>Hafalanku</span>
           </NavLink>
 

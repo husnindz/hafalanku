@@ -174,3 +174,15 @@ export interface LastReadPosition {
   updatedAt: string;
 }
 
+export interface TilawahBookmark {
+  id: string;
+  label: string;
+  mode: 'page' | 'ayah';
+  page: number;
+  surah: number;
+  ayah?: number;
+  surahName?: string;
+  isPinned: boolean;
+  updatedAt: string;
+}
+

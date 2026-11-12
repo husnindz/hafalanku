@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  Bookmark,
   ChevronLeft,
   ChevronRight,
   Minus,
@@ -12,7 +13,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import type { Ayah, PageBundle } from '@hafalanku/quran-types';
+import type { Ayah, PageBundle, TilawahBookmark } from '@hafalanku/quran-types';
 import { useAppContext } from '../../app/AppContext';
 import {
   getAvailablePagesMsi,
@@ -21,6 +22,11 @@ import {
   getSurahMap,
 } from '../../data/quran/datasetAdapter';
 import { loadLastRead, saveLastRead } from '../../lib/storage/preferences';
+import {
+  createTilawahBookmark,
+  listTilawahBookmarks,
+  updateTilawahBookmarkPosition,
+} from '../../lib/storage/tilawahBookmarks';
 import { StatusBanner } from '../../components/StatusBanner';
 
 export function QuranReaderPage() {
@@ -76,6 +82,12 @@ export function QuranReaderPage() {
   const [pageImageError, setPageImageError] = useState(false);
   const [pageAudioError, setPageAudioError] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBookmarkOpen, setIsBookmarkOpen] = useState(false);
+  const [bookmarks, setBookmarks] = useState<TilawahBookmark[]>(() =>
+    listTilawahBookmarks()
+  );
+  const [newBookmarkLabel, setNewBookmarkLabel] = useState('');
+  const [bookmarkFeedback, setBookmarkFeedback] = useState<string | null>(null);
   const [visibilityHint, setVisibilityHint] = useState<string | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const settingsPanelRef = useRef<HTMLDivElement | null>(null);
@@ -153,18 +165,19 @@ export function QuranReaderPage() {
   }, [ayahsInSurah, highlightedAyah, isLoadingContent, mode, selectedSurah]);
 
   useEffect(() => {
-    if (!isSettingsOpen) return;
+    if (!isSettingsOpen && !isBookmarkOpen) return;
     const handlePointerDown = (e: MouseEvent) => {
       if (
         settingsPanelRef.current &&
         !settingsPanelRef.current.contains(e.target as Node)
       ) {
         setIsSettingsOpen(false);
+        setIsBookmarkOpen(false);
       }
     };
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isSettingsOpen]);
+  }, [isBookmarkOpen, isSettingsOpen]);
 
   const setMode = (nextMode: 'page' | 'ayah') => {
     const next = new URLSearchParams(searchParams);
@@ -233,6 +246,44 @@ export function QuranReaderPage() {
     }
     setVisibilityHint(null);
     updatePreferences({ showPageText: checked });
+  };
+
+  const getCurrentPosition = () => {
+    const firstOnPage = pageBundle?.ayahs[0];
+    const targetAyah =
+      mode === 'page'
+        ? firstOnPage
+        : (highlightedAyah
+            ? ayahsInSurah.find((a) => a.ayahNumber === highlightedAyah)
+            : undefined) ?? ayahsInSurah[0];
+
+    const surahNum = targetAyah?.surahNumber ?? selectedSurah;
+    const pageNum =
+      mode === 'page' ? selectedPage : targetAyah?.pageNumberMsi ?? selectedPage;
+
+    return {
+      mode,
+      page: pageNum,
+      surah: surahNum,
+      ayah: targetAyah?.ayahNumber,
+      surahName: surahMap.get(surahNum)?.nameLatin,
+    };
+  };
+
+  const handleSaveToExistingBookmark = (id: string, label: string) => {
+    const updated = updateTilawahBookmarkPosition(id, getCurrentPosition());
+    setBookmarks(updated);
+    setBookmarkFeedback(`Posisi disimpan ke "${label}".`);
+  };
+
+  const handleCreateBookmark = (e: React.FormEvent) => {
+    e.preventDefault();
+    const pos = getCurrentPosition();
+    const label = newBookmarkLabel.trim() || `Tilawah Hal. ${pos.page}`;
+    const updated = createTilawahBookmark(label, pos);
+    setBookmarks(updated);
+    setNewBookmarkLabel('');
+    setBookmarkFeedback(`Penanda "${label}" tersimpan.`);
   };
 
   const handlePlayAyahAudio = (ayah: Ayah) => {
@@ -390,6 +441,7 @@ export function QuranReaderPage() {
               title="Pengaturan Tampilan"
               onClick={() => {
                 setVisibilityHint(null);
+                setIsBookmarkOpen(false);
                 setIsSettingsOpen((v) => !v);
               }}
               className={`inline-flex h-10 w-10 items-center justify-center rounded-[8px] border transition-colors ${
@@ -400,8 +452,110 @@ export function QuranReaderPage() {
             >
               <Settings2 className="h-4 w-4" aria-hidden="true" />
             </button>
+
+            <button
+              type="button"
+              aria-expanded={isBookmarkOpen}
+              aria-label="Simpan penanda tilawah"
+              title="Simpan Penanda Tilawah"
+              onClick={() => {
+                setBookmarkFeedback(null);
+                setBookmarks(listTilawahBookmarks());
+                setIsSettingsOpen(false);
+                setIsBookmarkOpen((v) => !v);
+              }}
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-[8px] border transition-colors ${
+                isBookmarkOpen
+                  ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--accent-primary)]'
+                  : 'border-[var(--border-default)] bg-[var(--bg-canvas)] text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]'
+              }`}
+            >
+              <Bookmark className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
         </div>
+
+        {/* Dropdown Simpan Penanda Tilawah (ala YouTube "Simpan ke...") */}
+        {isBookmarkOpen && (
+          <div className="mt-2 rounded-[12px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-4 shadow-md space-y-3">
+            <div className="flex items-center justify-between border-b border-[var(--border-default)] pb-2">
+              <h2 className="text-sm font-bold text-[var(--text-primary)]">
+                Simpan penanda tilawah...
+              </h2>
+              <button
+                type="button"
+                aria-label="Tutup penanda"
+                onClick={() => setIsBookmarkOpen(false)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {bookmarks.length > 0 ? (
+              <div className="max-h-48 space-y-1.5 overflow-y-auto">
+                {bookmarks.map((bm) => (
+                  <button
+                    key={bm.id}
+                    type="button"
+                    onClick={() => handleSaveToExistingBookmark(bm.id, bm.label)}
+                    className="flex w-full items-center justify-between rounded-[8px] bg-[var(--bg-canvas)] px-3 py-2 text-left hover:bg-[var(--bg-subtle)]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-[var(--text-primary)]">
+                        {bm.label}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)] tabular-nums">
+                        Hal. {bm.page}
+                        {bm.surahName ? ` • ${bm.surahName}` : ''}
+                        {bm.ayah ? `:${bm.ayah}` : ''}
+                      </p>
+                    </div>
+                    <Bookmark
+                      className="h-4 w-4 shrink-0 text-[var(--accent-primary)]"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--text-muted)]">
+                Belum ada daftar penanda. Buat penanda baru di bawah untuk
+                menyimpan posisi bacaan ini.
+              </p>
+            )}
+
+            <form
+              onSubmit={handleCreateBookmark}
+              className="flex items-center gap-2 border-t border-[var(--border-default)] pt-3"
+            >
+              <label htmlFor="new-bookmark-label" className="sr-only">
+                Nama penanda tilawah baru
+              </label>
+              <input
+                id="new-bookmark-label"
+                type="text"
+                value={newBookmarkLabel}
+                onChange={(e) => setNewBookmarkLabel(e.target.value)}
+                placeholder="Nama penanda baru (mis. Tilawah Subuh)..."
+                className="min-w-0 flex-1 rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-xs text-[var(--text-primary)]"
+              />
+              <button
+                type="submit"
+                className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-[8px] bg-[var(--accent-primary)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-hover)]"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Simpan</span>
+              </button>
+            </form>
+
+            {bookmarkFeedback && (
+              <p className="text-xs font-medium text-[var(--status-match)]">
+                {bookmarkFeedback}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Dropdown Pengaturan Baca */}
         {isSettingsOpen && (
