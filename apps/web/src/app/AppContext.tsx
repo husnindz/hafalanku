@@ -71,6 +71,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', preferences.darkMode);
+  }, [preferences.darkMode]);
+
   const updatePreferences = useCallback((patch: Partial<UserPreferences>) => {
     setPreferences((prev) => {
       const next = { ...prev, ...patch };

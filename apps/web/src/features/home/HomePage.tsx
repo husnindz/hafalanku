@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, BookOpen, Mic, Search } from 'lucide-react';
 import { useAppContext } from '../../app/AppContext';
 import { getAvailableJuzNumbers } from '../../data/quran/datasetAdapter';
+import { loadLastRead } from '../../lib/storage/preferences';
 import { StatusBanner } from '../../components/StatusBanner';
 
 export function HomePage() {
@@ -11,6 +12,7 @@ export function HomePage() {
   const [query, setQuery] = useState('');
   const [browseTab, setBrowseTab] = useState<'surah' | 'juz'>('surah');
   const navigate = useNavigate();
+  const lastRead = useMemo(() => loadLastRead(), []);
 
   const availableJuz = useMemo(
     () => (dataset ? getAvailableJuzNumbers(dataset) : []),
@@ -74,7 +76,13 @@ export function HomePage() {
             className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[var(--border-strong)] bg-[var(--bg-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-subtle)]"
           >
             <BookOpen className="h-4 w-4" aria-hidden="true" />
-            <span>Baca Al-Qur’an</span>
+            <span>
+              {lastRead
+                ? lastRead.mode === 'page'
+                  ? `Lanjutkan Tilawah (Hal. ${lastRead.page})`
+                  : `Lanjutkan Tilawah (${lastRead.surahName ?? `Surah ${lastRead.surah}`})`
+                : 'Baca Al-Qur’an'}
+            </span>
           </Link>
         </div>
       </section>

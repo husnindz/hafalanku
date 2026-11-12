@@ -157,7 +157,20 @@ export interface PracticeSessionLocal {
 export interface UserPreferences {
   arabicFontSizePx: number;
   showTranslation: boolean;
+  showPageImage: boolean;
+  showPageText: boolean;
+  showPageAudio: boolean;
+  darkMode: boolean;
   defaultTargetAyahCount: number;
   asrConfidenceThreshold: number;
+}
+
+export interface LastReadPosition {
+  mode: 'page' | 'ayah';
+  page: number;
+  surah: number;
+  ayah?: number;
+  surahName?: string;
+  updatedAt: string;
 }
 

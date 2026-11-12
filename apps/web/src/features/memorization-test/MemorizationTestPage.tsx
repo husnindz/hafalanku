@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   Check,
-  Download,
   Eye,
   Mic,
   Play,
@@ -81,7 +80,6 @@ export function MemorizationTestPage() {
   );
   const [promptAudioError, setPromptAudioError] = useState<string | null>(null);
   const [showPromptTextFallback, setShowPromptTextFallback] = useState(false);
-  const [manualTranscript, setManualTranscript] = useState('');
   const promptAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Metadata quiz inputs
@@ -98,6 +96,10 @@ export function MemorizationTestPage() {
 
   const recorder = useAudioRecorder();
   const asr = useLocalAsr();
+
+  useEffect(() => {
+    void asr.initModel();
+  }, [asr.initModel]);
 
   const startTest = async () => {
     if (!dataset) return;
@@ -130,7 +132,6 @@ export function MemorizationTestPage() {
       setSelection(picked);
       setPromptAudioError(null);
       setShowPromptTextFallback(false);
-      setManualTranscript('');
       setGuessSurahInput('');
       setGuessPageInput('');
       setGuessAyahInput('');
@@ -169,21 +170,13 @@ export function MemorizationTestPage() {
   const finishRecitationAndProceed = async () => {
     if (!selection) return;
 
-    const manual = manualTranscript.trim();
     setAsrWarning(null);
     setIsEvaluating(true);
 
     try {
       let evalSummary: RecitationEvaluationSummary;
 
-      if (manual.length > 0) {
-        evalSummary = evaluateRecitation({
-          recognizedTranscript: manual,
-          expectedAyahs: selection.expectedContinuation,
-          confidence: 0.88,
-          confidenceThreshold: preferences.asrConfidenceThreshold,
-        });
-      } else if (recorder.recordedAudio) {
+      if (recorder.recordedAudio) {
         const res = await asr.evaluateRecordedPcm(
           recorder.recordedAudio.pcm16k,
           selection.expectedContinuation,
@@ -422,7 +415,7 @@ export function MemorizationTestPage() {
 
           <fieldset className="space-y-3 border-t border-[var(--border-default)] pt-5">
             <legend className="text-sm font-semibold text-[var(--text-primary)]">
-              Kuis Metadata Opsional (mengacu pada ayat pemantik)
+              Kuis tambahan
             </legend>
             <div className="grid gap-2.5 sm:grid-cols-3">
               <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3.5 py-2 text-sm">
@@ -586,53 +579,6 @@ export function MemorizationTestPage() {
               </StatusBanner>
             )}
 
-            <div className="rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] p-3.5 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium text-[var(--text-secondary)]">
-                  Model ASR Lokal (Web Worker ONNX):{' '}
-                  <strong>
-                    {asr.modelState === 'unloaded' && 'Belum dimuat (lazy)'}
-                    {asr.modelState === 'downloading' && 'Mengunduh...'}
-                    {asr.modelState === 'ready' && 'Siap di perangkat'}
-                    {asr.modelState === 'processing' && 'Memproses...'}
-                    {asr.modelState === 'error' && 'Belum tersedia'}
-                    {asr.modelState === 'unsupported' && 'Tidak didukung'}
-                  </strong>
-                </span>
-
-                {asr.modelState === 'unloaded' && (
-                  <button
-                    type="button"
-                    onClick={asr.initModel}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-[var(--border-strong)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
-                  >
-                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Muat Model ASR Lokal</span>
-                  </button>
-                )}
-              </div>
-
-              {asr.modelState === 'downloading' && asr.progress && (
-                <div className="space-y-1">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border-default)]">
-                    <div
-                      className="h-full bg-[var(--accent-primary)] transition-all"
-                      style={{ width: `${asr.progress.percent}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-[var(--text-muted)] tabular-nums">
-                    {asr.progress.percent}%
-                  </p>
-                </div>
-              )}
-
-              {asr.statusMessage && (
-                <p className="text-xs text-[var(--text-muted)]">
-                  {asr.statusMessage}
-                </p>
-              )}
-            </div>
-
             <div className="flex flex-wrap items-center gap-3">
               {recorder.status !== 'recording' ? (
                 <button
@@ -698,40 +644,17 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            <div className="border-t border-[var(--border-default)] pt-4 space-y-2">
-              <label
-                htmlFor="manual-transcript-input"
-                className="block text-xs font-medium text-[var(--text-secondary)]"
-              >
-                Transkripsi Uji Lokal (opsional jika model ONNX belum terpasang)
-              </label>
-              <textarea
-                id="manual-transcript-input"
-                dir="rtl"
-                lang="ar"
-                rows={2}
-                value={manualTranscript}
-                onChange={(e) => setManualTranscript(e.target.value)}
-                placeholder="Tempel atau ketik bacaan Arab di sini untuk menguji pencocokan ayat..."
-                className="font-quran w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3.5 py-2 text-lg"
-              />
-            </div>
-
             <div className="flex justify-end pt-2">
               <button
                 type="button"
-                disabled={
-                  isEvaluating ||
-                  (!recorder.recordedAudio &&
-                    manualTranscript.trim().length === 0)
-                }
+                disabled={isEvaluating || !recorder.recordedAudio}
                 onClick={finishRecitationAndProceed}
                 className="inline-flex min-h-[46px] items-center gap-2 rounded-[10px] bg-[var(--accent-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-40"
               >
                 <Check className="h-4 w-4" aria-hidden="true" />
                 <span>
                   {isEvaluating
-                    ? 'Memproses Evaluasi Lokal...'
+                    ? 'Memproses Evaluasi...'
                     : 'Lanjut ke Evaluasi'}
                 </span>
               </button>
@@ -913,10 +836,6 @@ export function MemorizationTestPage() {
                 </div>
               </div>
             )}
-
-            <p className="text-xs text-[var(--text-muted)]">
-              {evaluation.disclaimer}
-            </p>
           </div>
 
           <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
@@ -1054,7 +973,7 @@ export function MemorizationTestPage() {
             </button>
 
             <Link
-              to={`/baca?mode=ayah&surah=${selection.promptAyah.surahNumber}&ayah=${selection.promptAyah.ayahNumber}`}
+              to={`/baca?mode=ayah&surah=${selection.promptAyah.surahNumber}&ayah=${selection.promptAyah.ayahNumber}&page=${selection.promptAyah.pageNumberMsi}`}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
             >
               <VolumeX className="hidden" aria-hidden="true" />
