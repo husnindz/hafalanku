@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+apps/api/vendor/
+
+# Build & Deploy outputs
+dist/
+apps/web/dist/
+packages/*/dist/
+deploy-bundle/
+*.zip
+
+# Local environment & secrets (NEVER commit or upload)
+.env
+.env.local
+.env.*.local
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+

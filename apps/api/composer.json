@@ -1,0 +1,14 @@
+{
+  "name": "hafalanku/api",
+  "description": "Kerangka REST API PHP 8.x OOP untuk fase lanjutan Hafalanku di Rumahweb Shared Hosting Entry (tidak diaktifkan pada MVP statis).",
+  "type": "project",
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Hafalanku\\Api\\": "src/"
+    }
+  }
+}
+

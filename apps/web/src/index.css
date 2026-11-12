@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+:root {
+  --bg-canvas: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f2f0e8;
+  --text-primary: #171c19;
+  --text-secondary: #4b5650;
+  --text-muted: #6b7670;
+  --accent-primary: #166534;
+  --accent-hover: #14532d;
+  --accent-soft: #eaf3ec;
+  --border-default: #e2dfd5;
+  --border-strong: #c9c4b6;
+
+  --status-match: #15803d;
+  --status-match-bg: #ecfdf3;
+  --status-miss: #b91c1c;
+  --status-miss-bg: #fef2f2;
+  --status-uncertain: #b45309;
+  --status-uncertain-bg: #fffbeb;
+  --status-info: #1d4ed8;
+  --status-info-bg: #eff6ff;
+}
+
+@layer base {
+  html {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--text-primary);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+  }
+}
+
+.font-quran {
+  font-family: 'Amiri Quran', 'Scheherazade New', 'Noto Naskh Arabic', serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+  line-height: 2.35;
+  padding-block: 0.25rem;
+  font-feature-settings: 'liga' 1, 'calt' 1, 'mark' 1, 'mkmk' 1;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

@@ -1,0 +1,24 @@
+{
+  "name": "hafalanku-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo Hafalanku: Aplikasi murojaah dan tes sambung ayat Al-Qur'an berbasis MSI dengan ASR lokal di browser.",
+  "workspaces": [
+    "apps/web",
+    "packages/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@hafalanku/web",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace=@hafalanku/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "validate:data": "npm run validate --workspace=@hafalanku/data-importer",
+    "package:deploy": "node tools/deploy/package-deploy.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+

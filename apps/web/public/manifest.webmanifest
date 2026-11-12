@@ -1,0 +1,11 @@
+{
+  "name": "Hafalanku",
+  "short_name": "Hafalanku",
+  "description": "Murojaah, tes sambung ayat, dan pembaca Al-Qur'an Mushaf Standar Indonesia.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F5",
+  "theme_color": "#166534",
+  "lang": "id"
+}
+
