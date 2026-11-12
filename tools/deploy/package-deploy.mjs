@@ -66,12 +66,8 @@ function main() {
 
   if (process.platform === 'win32') {
     execFileSync(
-      'powershell',
-      [
-        '-NoProfile',
-        '-Command',
-        `Compress-Archive -Path "${BUNDLE_DIR}\\*" -DestinationPath "${ZIP_PATH}" -Force`,
-      ],
+      'tar',
+      ['-a', '-c', '-f', ZIP_PATH, '-C', BUNDLE_DIR, '.'],
       { stdio: 'inherit' }
     );
   } else {
