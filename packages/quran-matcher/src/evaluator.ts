@@ -149,10 +149,12 @@ export function evaluateRecitation(
     textUthmaniMsi: a.textUthmaniMsi,
   }));
 
-  // Confidence rendah atau transkripsi kosong tidak langsung dinilai salah.
+  // Jika confidence di bawah ambang atau tidak ada kata yang cocok:
+  // Nilai sebagai jawaban salah (mismatch) dengan seluruh kata target berstatus missed.
   if (input.confidence < confidenceThreshold || recognizedWords.length === 0) {
+    const totalWords = expectedTokens.length;
     return {
-      status: 'unratable',
+      status: 'mismatch',
       confidence: input.confidence,
       confidenceThreshold,
       recognizedTranscript: input.recognizedTranscript,
@@ -160,13 +162,13 @@ export function evaluateRecitation(
       expectedAyahs: expectedSummary,
       wordAlignments: expectedTokens.map((token) => ({
         expectedWord: token.displayWord,
-        status: 'uncertain',
+        status: 'missed',
         surahNumber: token.surahNumber,
         ayahNumber: token.ayahNumber,
       })),
       matchedWordCount: 0,
-      expectedWordCount: expectedTokens.length,
-      missedCount: 0,
+      expectedWordCount: totalWords,
+      missedCount: totalWords,
       substitutedCount: 0,
       extraCount: 0,
       disclaimer: EVALUATION_DISCLAIMER,

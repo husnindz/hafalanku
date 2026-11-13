@@ -275,14 +275,21 @@ export function useLocalAsr() {
           `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`
         );
 
-        // Jika model tidak berhasil mengunci bacaan atau confidence di bawah ambang
+        // Jika model tidak berhasil mengunci bacaan atau confidence di bawah ambang:
+        // Pengguna menjawab salah atau bacaan tidak cocok dengan ayat target kelanjutan.
         if (!lastObservedWord || maxConfidence < confidenceThreshold) {
+          const totalWords = expectedAyahs.reduce(
+            (acc, a) =>
+              acc + a.textUthmaniMsi.trim().split(/\s+/).filter(Boolean).length,
+            0
+          );
           return {
             summary: {
-              status: 'unratable',
+              status: 'mismatch',
               confidence: maxConfidence,
               confidenceThreshold,
-              recognizedTranscript: '',
+              recognizedTranscript:
+                'Bacaan tidak sesuai dengan target kelanjutan ayat.',
               normalizedTranscript: '',
               expectedAyahs: expectedSummary,
               wordAlignments: expectedAyahs.flatMap((ayah) =>
@@ -292,18 +299,14 @@ export function useLocalAsr() {
                   .filter(Boolean)
                   .map((w) => ({
                     expectedWord: w,
-                    status: 'uncertain' as const,
+                    status: 'missed' as const,
                     surahNumber: ayah.surahNumber,
                     ayahNumber: ayah.ayahNumber,
                   }))
               ),
               matchedWordCount: 0,
-              expectedWordCount: expectedAyahs.reduce(
-                (acc, a) =>
-                  acc + a.textUthmaniMsi.trim().split(/\s+/).filter(Boolean).length,
-                0
-              ),
-              missedCount: 0,
+              expectedWordCount: totalWords,
+              missedCount: totalWords,
               substitutedCount: 0,
               extraCount: 0,
               disclaimer: TILAWA_DISCLAIMER,

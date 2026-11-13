@@ -901,59 +901,51 @@ export function MemorizationTestPage() {
                 {evaluation.status === 'partial' && 'Cocok sebagian'}
                 {evaluation.status === 'unratable' &&
                   'Tidak dapat dinilai / Coba ulang'}
-                {evaluation.status === 'mismatch' && 'Banyak bagian berbeda'}
+                {evaluation.status === 'mismatch' && 'Jawaban Salah / Tidak Sesuai'}
               </span>
             </div>
 
-            {evaluation.status === 'unratable' ? (
+            {evaluation.status === 'unratable' && asrWarning && (
               <StatusBanner
                 tone="warning"
-                title={
-                  asrWarning
-                    ? 'Transkripsi ASR Lokal Belum Tersedia'
-                    : 'Confidence ASR Rendah / Kosong'
-                }
+                title="Transkripsi ASR Lokal Belum Tersedia"
               >
-                <p>
-                  {asrWarning
-                    ? asrWarning
-                    : `Sistem tidak cukup yakin menilai bacaan Anda (confidence ${(evaluation.confidence * 100).toFixed(0)}%). Hal ini tidak otomatis berarti bacaan salah — Anda dapat mengulang rekaman di tempat yang lebih tenang.`}
-                </p>
+                <p>{asrWarning}</p>
               </StatusBanner>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-[var(--text-secondary)] tabular-nums">
-                  Kata cocok: {evaluation.matchedWordCount} /{' '}
-                  {evaluation.expectedWordCount} • Terlewat:{' '}
-                  {evaluation.missedCount} • Berbeda:{' '}
-                  {evaluation.substitutedCount} • Tambahan:{' '}
-                  {evaluation.extraCount}
-                </p>
-                <div
-                  dir="rtl"
-                  lang="ar"
-                  className="flex flex-wrap gap-2 rounded-[12px] border border-[var(--border-default)] bg-[var(--bg-canvas)] p-4"
-                >
-                  {evaluation.wordAlignments.map((item, idx) => (
-                    <span
-                      key={idx}
-                      className={`font-quran rounded-[6px] px-2 py-0.5 text-xl ${
-                        item.status === 'matched'
-                          ? 'bg-[var(--status-match-bg)] text-[var(--status-match)]'
-                          : item.status === 'missed'
-                            ? 'bg-[var(--status-miss-bg)] text-[var(--status-miss)] underline decoration-dashed'
-                            : item.status === 'substituted'
-                              ? 'bg-[var(--status-uncertain-bg)] text-[var(--status-uncertain)]'
-                              : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                      }`}
-                      title={`Status: ${item.status}`}
-                    >
-                      {item.expectedWord ?? item.recognizedWord}
-                    </span>
-                  ))}
-                </div>
-              </div>
             )}
+
+            <div className="space-y-3">
+              <p className="text-xs text-[var(--text-secondary)] tabular-nums">
+                Kata cocok: {evaluation.matchedWordCount} /{' '}
+                {evaluation.expectedWordCount} • Terlewat:{' '}
+                {evaluation.missedCount} • Berbeda:{' '}
+                {evaluation.substitutedCount} • Tambahan:{' '}
+                {evaluation.extraCount}
+              </p>
+              <div
+                dir="rtl"
+                lang="ar"
+                className="flex flex-wrap gap-2 rounded-[12px] border border-[var(--border-default)] bg-[var(--bg-canvas)] p-4"
+              >
+                {evaluation.wordAlignments.map((item, idx) => (
+                  <span
+                    key={idx}
+                    className={`font-quran rounded-[6px] px-2 py-0.5 text-xl ${
+                      item.status === 'matched'
+                        ? 'bg-[var(--status-match-bg)] text-[var(--status-match)]'
+                        : item.status === 'missed'
+                          ? 'bg-[var(--status-miss-bg)] text-[var(--status-miss)] underline decoration-dashed'
+                          : item.status === 'substituted'
+                            ? 'bg-[var(--status-uncertain-bg)] text-[var(--status-uncertain)]'
+                            : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                    }`}
+                    title={`Status: ${item.status}`}
+                  >
+                    {item.expectedWord ?? item.recognizedWord}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
