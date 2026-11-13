@@ -146,6 +146,10 @@ export function SettingsPage() {
           perangkat Anda. Tidak ada audio atau data bacaan pribadi yang dikirim
           atau disimpan di server.
         </p>
+        <div className="pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+          <span>Hafalanku • Mushaf Standar Indonesia</span>
+          <span className="font-mono font-medium">v1.0.0</span>
+        </div>
       </section>
     </div>
   );
