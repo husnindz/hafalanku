@@ -72,7 +72,7 @@ export async function loadGlobalAsrModel(): Promise<TilawaInstance | null> {
   updateStore({
     modelState: 'downloading',
     progress: { loadedBytes: 0, totalBytes: 100, percent: 0 },
-    statusMessage: 'Mengunduh model ASR lokal (Tilawa ONNX, di-cache di browser)...',
+    statusMessage: 'Mengunduh data...',
   });
   globalLastError = null;
 
@@ -95,8 +95,8 @@ export async function loadGlobalAsrModel(): Promise<TilawaInstance | null> {
             percent,
           },
           statusMessage: p.fromCache
-            ? 'Memuat model ASR dari cache browser...'
-            : `Mengunduh ${p.stage === 'model' ? 'model ASR lokal' : 'referensi Al-Qur’an'} (${percent}%)...`,
+            ? 'Memuat data dari cache browser...'
+            : `Mengunduh data (${percent}%)...`,
         });
       };
 

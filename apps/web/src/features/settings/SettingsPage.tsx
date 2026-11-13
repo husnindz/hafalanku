@@ -139,7 +139,7 @@ export function SettingsPage() {
               {asr.modelState === 'downloading' ? (
                 <>
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Mengunduh ({asr.progress?.percent ?? 0}%)...</span>
+                  <span>Mengunduh data ({asr.progress?.percent ?? 0}%)...</span>
                 </>
               ) : asr.modelState === 'ready' ? (
                 <>
@@ -170,7 +170,7 @@ export function SettingsPage() {
                 {asr.modelState === 'ready'
                   ? 'Model Terpasang & Siap'
                   : asr.modelState === 'downloading'
-                    ? 'Sedang Mengunduh & Memasang...'
+                    ? 'Mengunduh data...'
                     : 'Belum Terunduh / Standby'}
               </span>
             </div>

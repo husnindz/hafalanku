@@ -384,7 +384,7 @@ export function MemorizationTestPage() {
   if (isLoadingDataset || !dataset) {
     return (
       <div className="rounded-[12px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 text-sm text-[var(--text-secondary)]">
-        Menyiapkan data tes hafalan...
+        Mengunduh data...
       </div>
     );
   }
@@ -416,7 +416,7 @@ export function MemorizationTestPage() {
           <div className="flex items-center gap-2.5">
             <Loader2 className="h-4 w-4 animate-spin text-[var(--accent-primary)] shrink-0" />
             <span>
-              {asr.statusMessage ?? 'Mengunduh model AI pengenalan suara di latar belakang...'}
+              {asr.statusMessage ?? 'Mengunduh data...'}
             </span>
           </div>
           <span className="font-semibold tabular-nums text-[var(--accent-primary)]">
