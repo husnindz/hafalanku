@@ -26,6 +26,23 @@ function compareWordRef(
   return a.word - b.word;
 }
 
+export function extractWordsFromAyahText(text: string): string[] {
+  // Regex untuk mendeteksi apakah token mengandung setidaknya satu huruf Arab (bukan hanya tanda waqaf/harakat)
+  const arabicLetterRegex = /[\u0621-\u064A\u0671-\u06D3]/;
+
+  return text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => arabicLetterRegex.test(token))
+    .map((token) =>
+      token
+        .replace(/^[\u06D6-\u06ED]+/, '')
+        .replace(/[\u06D6-\u06ED]+$/, '')
+    )
+    .filter((token) => token.length > 0 && arabicLetterRegex.test(token));
+}
+
 // Module-level singleton store agar model tidak dibuang saat pindah halaman
 // dan status download tersinkronisasi di seluruh aplikasi.
 interface AsrStoreState {
@@ -291,7 +308,7 @@ export function useLocalAsr() {
           word: 1,
         };
         const lastAyahWordsCount =
-          lastAyah.textUthmaniMsi.trim().split(/\s+/).filter(Boolean).length;
+          extractWordsFromAyahText(lastAyah.textUthmaniMsi).length;
         const lastAyahRef = {
           surah: lastAyah.surahNumber,
           ayah: lastAyah.ayahNumber,
@@ -315,6 +332,32 @@ export function useLocalAsr() {
             maxConfidence = top.confidence;
           }
           if (top.confidence >= confidenceThreshold) {
+            // Periksa rentang span yang berhasil dicocokkan model
+            if (top.span) {
+              if (
+                compareWordRef(top.span.start, firstAyahRef) >= 0 &&
+                compareWordRef(top.span.start, lastAyahRef) <= 0
+              ) {
+                if (
+                  !firstObservedWord ||
+                  compareWordRef(top.span.start, firstObservedWord) < 0
+                ) {
+                  firstObservedWord = top.span.start;
+                }
+              }
+              if (
+                compareWordRef(top.span.end, firstAyahRef) >= 0 &&
+                compareWordRef(top.span.end, lastAyahRef) <= 0
+              ) {
+                if (
+                  !lastObservedWord ||
+                  compareWordRef(top.span.end, lastObservedWord) > 0
+                ) {
+                  lastObservedWord = top.span.end;
+                }
+              }
+            }
+
             if (
               compareWordRef(top.word, firstAyahRef) >= 0 &&
               compareWordRef(top.word, lastAyahRef) <= 0
@@ -342,7 +385,7 @@ export function useLocalAsr() {
         if (!lastObservedWord || maxConfidence < confidenceThreshold) {
           const totalWords = expectedAyahs.reduce(
             (acc, a) =>
-              acc + a.textUthmaniMsi.trim().split(/\s+/).filter(Boolean).length,
+              acc + extractWordsFromAyahText(a.textUthmaniMsi).length,
             0
           );
           return {
@@ -355,16 +398,12 @@ export function useLocalAsr() {
               normalizedTranscript: '',
               expectedAyahs: expectedSummary,
               wordAlignments: expectedAyahs.flatMap((ayah) =>
-                ayah.textUthmaniMsi
-                  .trim()
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .map((w) => ({
-                    expectedWord: w,
-                    status: 'missed' as const,
-                    surahNumber: ayah.surahNumber,
-                    ayahNumber: ayah.ayahNumber,
-                  }))
+                extractWordsFromAyahText(ayah.textUthmaniMsi).map((w) => ({
+                  expectedWord: w,
+                  status: 'missed' as const,
+                  surahNumber: ayah.surahNumber,
+                  ayahNumber: ayah.ayahNumber,
+                }))
               ),
               matchedWordCount: 0,
               expectedWordCount: totalWords,
@@ -388,15 +427,13 @@ export function useLocalAsr() {
         }
 
         // Normalisasi kata awal:
-        // Jika model mengunci posisi pada kata ke-2 atau ke-3 di ayat pertama,
-        // dan engine Tilawa TIDAK melaporkan adanya kesalahan (omitted_word / wrong_word)
-        // pada kata-kata pembuka tersebut, maka kata pembuka tersebut adalah bagian sah
-        // dari bacaan pengguna yang dibaca saat fase onset.
+        // Jika pembaca mulai membaca dari awal target dan Tilawa TIDAK melaporkan
+        // adanya kata terlewat (omitted_word / wrong_word) sebelum firstObservedWord,
+        // maka pembaca membaca kata-kata pembuka tersebut dengan benar sejak onset.
         if (
           firstObservedWord &&
           firstObservedWord.surah === firstAyah.surahNumber &&
-          firstObservedWord.ayah === firstAyah.ayahNumber &&
-          firstObservedWord.word <= 3
+          firstObservedWord.ayah === firstAyah.ayahNumber
         ) {
           let hasExplicitMistakeAtStart = false;
           for (let w = 1; w < firstObservedWord.word; w++) {
@@ -407,11 +444,29 @@ export function useLocalAsr() {
             }
           }
           if (!hasExplicitMistakeAtStart) {
-            firstObservedWord = {
-              surah: firstAyah.surahNumber,
-              ayah: firstAyah.ayahNumber,
-              word: 1,
-            };
+            firstObservedWord = firstAyahRef;
+          }
+        }
+
+        // Normalisasi kata akhir:
+        // Jika pembaca membaca hingga mendekati akhir ayat target (misal kata terakhir ayat penutup)
+        // dan Tilawa tidak melaporkan omission di akhir, pastikan akhir ayat dinilai tuntas.
+        if (
+          lastObservedWord &&
+          lastObservedWord.surah === lastAyah.surahNumber &&
+          lastObservedWord.ayah === lastAyah.ayahNumber &&
+          lastObservedWord.word >= lastAyahRef.word - 1
+        ) {
+          let hasExplicitMistakeAtEnd = false;
+          for (let w = lastObservedWord.word + 1; w <= lastAyahRef.word; w++) {
+            const checkKey = `${lastAyah.surahNumber}:${lastAyah.ayahNumber}:${w}`;
+            if (mistakeMap.has(checkKey)) {
+              hasExplicitMistakeAtEnd = true;
+              break;
+            }
+          }
+          if (!hasExplicitMistakeAtEnd) {
+            lastObservedWord = lastAyahRef;
           }
         }
 
@@ -422,7 +477,7 @@ export function useLocalAsr() {
         let expectedWordCount = 0;
 
         for (const ayah of expectedAyahs) {
-          const words = ayah.textUthmaniMsi.trim().split(/\s+/).filter(Boolean);
+          const words = extractWordsFromAyahText(ayah.textUthmaniMsi);
           words.forEach((wordText, idx) => {
             expectedWordCount++;
             const ref = {
