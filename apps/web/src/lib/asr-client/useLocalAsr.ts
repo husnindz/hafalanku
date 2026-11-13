@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type {
   AsrDownloadProgress,
   AsrModelState,
@@ -26,105 +26,144 @@ function compareWordRef(
   return a.word - b.word;
 }
 
-export function useLocalAsr() {
-  const [modelState, setModelState] = useState<AsrModelState>(() =>
-    typeof WebAssembly === 'undefined' ? 'unsupported' : 'unloaded'
-  );
-  const [progress, setProgress] = useState<AsrDownloadProgress | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const tilawaRef = useRef<TilawaInstance | null>(null);
-  const initPromiseRef = useRef<Promise<TilawaInstance | null> | null>(null);
-  const lastErrorRef = useRef<string | null>(null);
+// Module-level singleton store agar model tidak dibuang saat pindah halaman
+// dan status download tersinkronisasi di seluruh aplikasi.
+interface AsrStoreState {
+  modelState: AsrModelState;
+  progress: AsrDownloadProgress | null;
+  statusMessage: string | null;
+}
 
-  useEffect(() => {
-    return () => {
-      tilawaRef.current?.dispose();
-      tilawaRef.current = null;
-    };
-  }, []);
+let storeState: AsrStoreState = {
+  modelState: typeof WebAssembly === 'undefined' ? 'unsupported' : 'unloaded',
+  progress: null,
+  statusMessage: null,
+};
 
-  const initModel = useCallback(async (): Promise<TilawaInstance | null> => {
-    if (tilawaRef.current) return tilawaRef.current;
-    if (initPromiseRef.current) return initPromiseRef.current;
+let globalTilawa: TilawaInstance | null = null;
+let globalInitPromise: Promise<TilawaInstance | null> | null = null;
+let globalLastError: string | null = null;
+const listeners = new Set<() => void>();
 
-    if (typeof WebAssembly === 'undefined') {
-      setModelState('unsupported');
-      setStatusMessage(
-        'Browser Anda tidak mendukung WebAssembly untuk menjalankan model ASR lokal.'
-      );
-      return null;
-    }
+function notifyListeners() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
 
-    setModelState('downloading');
-    lastErrorRef.current = null;
-    setProgress({ loadedBytes: 0, totalBytes: 100, percent: 0 });
-    setStatusMessage('Mengunduh model ASR lokal (Tilawa ONNX, di-cache di browser)...');
+function updateStore(patch: Partial<AsrStoreState>) {
+  storeState = { ...storeState, ...patch };
+  notifyListeners();
+}
 
-    initPromiseRef.current = (async () => {
-      try {
-        const { createTilawa } = await import('@tilawa/core/web');
+export async function loadGlobalAsrModel(): Promise<TilawaInstance | null> {
+  if (globalTilawa) return globalTilawa;
+  if (globalInitPromise) return globalInitPromise;
 
-        const handleProgress = (p: {
-          fraction: number;
-          loaded: number;
-          total: number;
-          stage?: string;
-          fromCache?: boolean;
-        }) => {
-          const percent = Math.min(100, Math.round(p.fraction * 100));
-          setProgress({
+  if (typeof WebAssembly === 'undefined') {
+    updateStore({
+      modelState: 'unsupported',
+      statusMessage:
+        'Browser Anda tidak mendukung WebAssembly untuk menjalankan model ASR lokal.',
+    });
+    return null;
+  }
+
+  updateStore({
+    modelState: 'downloading',
+    progress: { loadedBytes: 0, totalBytes: 100, percent: 0 },
+    statusMessage: 'Mengunduh model ASR lokal (Tilawa ONNX, di-cache di browser)...',
+  });
+  globalLastError = null;
+
+  globalInitPromise = (async () => {
+    try {
+      const { createTilawa } = await import('@tilawa/core/web');
+
+      const handleProgress = (p: {
+        fraction: number;
+        loaded: number;
+        total: number;
+        stage?: string;
+        fromCache?: boolean;
+      }) => {
+        const percent = Math.min(100, Math.round(p.fraction * 100));
+        updateStore({
+          progress: {
             loadedBytes: p.loaded,
             totalBytes: p.total || 100,
             percent,
-          });
-          setStatusMessage(
-            p.fromCache
-              ? 'Memuat model ASR dari cache browser...'
-              : `Mengunduh ${p.stage === 'model' ? 'model ASR lokal' : 'referensi Al-Qur’an'} (${percent}%)...`
-          );
-        };
+          },
+          statusMessage: p.fromCache
+            ? 'Memuat model ASR dari cache browser...'
+            : `Mengunduh ${p.stage === 'model' ? 'model ASR lokal' : 'referensi Al-Qur’an'} (${percent}%)...`,
+        });
+      };
 
-        const localBase =
-          typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
+      const localBase =
+        typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
 
-        let tilawa: TilawaInstance;
-        try {
-          // Prioritaskan pemuatan dari server/hosting sendiri agar cepat dan bebas blokir CDN
-          tilawa = await createTilawa({
-            tier: 'lite',
-            assetBase: localBase,
-            onProgress: handleProgress,
-          });
-        } catch (localErr) {
-          console.warn('Gagal memuat model dari origin lokal, mencoba CDN fallback...', localErr);
-          tilawa = await createTilawa({
-            tier: 'lite',
-            onProgress: handleProgress,
-          });
-        }
-
-        tilawaRef.current = tilawa;
-        setModelState('ready');
-        setProgress({ loadedBytes: 100, totalBytes: 100, percent: 100 });
-        setStatusMessage(
-          `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`
-        );
-        return tilawa;
-      } catch (err) {
-        const msg =
-          err instanceof Error
-            ? `Gagal memuat model ASR lokal: ${err.message}`
-            : 'Gagal memuat model ASR lokal.';
-        lastErrorRef.current = msg;
-        setModelState('error');
-        setStatusMessage(msg);
-        return null;
-      } finally {
-        initPromiseRef.current = null;
+      let tilawa: TilawaInstance;
+      try {
+        // Prioritaskan pemuatan dari server/hosting sendiri agar cepat dan bebas blokir CDN
+        tilawa = await createTilawa({
+          tier: 'lite',
+          assetBase: localBase,
+          onProgress: handleProgress,
+        });
+      } catch (localErr) {
+        console.warn('Gagal memuat model dari origin lokal, mencoba CDN fallback...', localErr);
+        tilawa = await createTilawa({
+          tier: 'lite',
+          onProgress: handleProgress,
+        });
       }
-    })();
 
-    return initPromiseRef.current;
+      globalTilawa = tilawa;
+      updateStore({
+        modelState: 'ready',
+        progress: { loadedBytes: 100, totalBytes: 100, percent: 100 },
+        statusMessage: `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`,
+      });
+      return tilawa;
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? `Gagal memuat model ASR lokal: ${err.message}`
+          : 'Gagal memuat model ASR lokal.';
+      globalLastError = msg;
+      updateStore({
+        modelState: 'error',
+        statusMessage: msg,
+      });
+      return null;
+    } finally {
+      globalInitPromise = null;
+    }
+  })();
+
+  return globalInitPromise;
+}
+
+export function useLocalAsr() {
+  const store = useSyncExternalStore(
+    (callback) => {
+      listeners.add(callback);
+      return () => listeners.delete(callback);
+    },
+    () => storeState,
+    () => storeState
+  );
+
+  // Otomatis mulai unduh saat komponen yang butuh ASR pertama kali dibuka
+  useEffect(() => {
+    if (storeState.modelState === 'unloaded') {
+      void loadGlobalAsrModel();
+    }
+  }, []);
+
+  const initModel = useCallback(async (): Promise<TilawaInstance | null> => {
+    return loadGlobalAsrModel();
   }, []);
 
   const evaluateRecordedPcm = useCallback(
@@ -139,11 +178,11 @@ export function useLocalAsr() {
         textUthmaniMsi: a.textUthmaniMsi,
       }));
 
-      const tilawa = await initModel();
+      const tilawa = await loadGlobalAsrModel();
       if (!tilawa) {
         return {
           warning:
-            lastErrorRef.current ??
+            globalLastError ??
             'Model ASR lokal gagal dimuat. Periksa koneksi internet untuk unduhan pertama atau gunakan Transkripsi Uji Lokal.',
           summary: {
             status: 'unratable',
@@ -163,8 +202,10 @@ export function useLocalAsr() {
         };
       }
 
-      setModelState('processing');
-      setStatusMessage('Menganalisis rekaman suara secara lokal...');
+      updateStore({
+        modelState: 'processing',
+        statusMessage: 'Menganalisis rekaman suara secara lokal...',
+      });
 
       try {
         const firstAyah = expectedAyahs[0];
@@ -294,10 +335,10 @@ export function useLocalAsr() {
         }
 
         session.dispose();
-        setModelState('ready');
-        setStatusMessage(
-          `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`
-        );
+        updateStore({
+          modelState: 'ready',
+          statusMessage: `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`,
+        });
 
         // Jika model tidak berhasil mengunci bacaan atau confidence di bawah ambang:
         // Pengguna menjawab salah atau bacaan tidak cocok dengan ayat target kelanjutan.
@@ -436,12 +477,14 @@ export function useLocalAsr() {
           },
         };
       } catch (err) {
-        setModelState('error');
         const msg =
           err instanceof Error
             ? err.message
             : 'Gagal menjalankan inferensi ASR lokal.';
-        setStatusMessage(msg);
+        updateStore({
+          modelState: 'error',
+          statusMessage: msg,
+        });
         return {
           warning: msg,
           summary: {
@@ -462,13 +505,13 @@ export function useLocalAsr() {
         };
       }
     },
-    [initModel, statusMessage]
+    [initModel]
   );
 
   return {
-    modelState,
-    progress,
-    statusMessage,
+    modelState: store.modelState,
+    progress: store.progress,
+    statusMessage: store.statusMessage,
     initModel,
     evaluateRecordedPcm,
   };

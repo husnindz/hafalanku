@@ -5,6 +5,7 @@ import { useAppContext } from '../../app/AppContext';
 import { getAvailableJuzNumbers } from '../../data/quran/datasetAdapter';
 import { getPinnedTilawahBookmark } from '../../lib/storage/tilawahBookmarks';
 import { StatusBanner } from '../../components/StatusBanner';
+import { loadGlobalAsrModel } from '../../lib/asr-client/useLocalAsr';
 
 export function HomePage() {
   const { dataset, isLoadingDataset, datasetError, reloadDataset } =
@@ -66,6 +67,7 @@ export function HomePage() {
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             to="/tes"
+            onClick={() => void loadGlobalAsrModel()}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] bg-[var(--accent-primary)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--accent-hover)]"
           >
             <Mic className="h-4 w-4" aria-hidden="true" />

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../app/AppContext';
 import { StatusBanner } from './StatusBanner';
+import { loadGlobalAsrModel } from '../lib/asr-client/useLocalAsr';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Beranda', icon: Home },
@@ -47,6 +48,11 @@ export function AppShell() {
                 key={to}
                 to={to}
                 end={to === '/'}
+                onClick={() => {
+                  if (to === '/tes') {
+                    void loadGlobalAsrModel();
+                  }
+                }}
                 className={({ isActive }) =>
                   `rounded-[8px] px-3 py-2 text-sm font-medium transition-colors ${
                     isActive
@@ -106,6 +112,11 @@ export function AppShell() {
               key={to}
               to={to}
               end={to === '/'}
+              onClick={() => {
+                if (to === '/tes') {
+                  void loadGlobalAsrModel();
+                }
+              }}
               className={({ isActive }) =>
                 `flex min-h-[56px] flex-col items-center justify-center gap-1 px-1 py-1.5 text-[11px] font-medium transition-colors ${
                   isActive
