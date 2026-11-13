@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { CheckCircle2, Download, Loader2 } from 'lucide-react';
 import { useAppContext } from '../../app/AppContext';
 import { StatusBanner } from '../../components/StatusBanner';
 import { clearQuranApiCache } from '../../lib/storage/quranApiCache';
 import { resetCachedDatasetInMemory } from '../../data/quran/datasetAdapter';
+import { useLocalAsr } from '../../lib/asr-client/useLocalAsr';
 
 export function SettingsPage() {
   const { preferences, updatePreferences, reloadDataset } = useAppContext();
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
+  const asr = useLocalAsr();
 
   const handleClearAllCache = async () => {
     await clearQuranApiCache();
@@ -114,6 +117,68 @@ export function SettingsPage() {
               }`}
             />
           </button>
+        </div>
+
+        {/* Status & Unduh Model AI Lokal */}
+        <div className="border-t border-[var(--border-default)] pt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Model AI Pengenalan Suara (Tilawa ONNX)
+              </p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Model lokal di browser untuk evaluasi hafalan secara privat dan offline.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={asr.modelState === 'downloading'}
+              onClick={() => void asr.initModel()}
+              className="inline-flex min-h-[38px] items-center gap-2 rounded-[8px] bg-[var(--accent-primary)] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
+            >
+              {asr.modelState === 'downloading' ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Mengunduh ({asr.progress?.percent ?? 0}%)...</span>
+                </>
+              ) : asr.modelState === 'ready' ? (
+                <>
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Model Siap (Verifikasi)</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Unduh &amp; Pasang Model</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="rounded-[8px] bg-[var(--bg-canvas)] p-3 text-xs space-y-1">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  asr.modelState === 'ready'
+                    ? 'bg-[var(--status-match)]'
+                    : asr.modelState === 'downloading'
+                      ? 'bg-[var(--status-info)] animate-pulse'
+                      : 'bg-[var(--text-muted)]'
+                }`}
+              />
+              <span className="font-semibold text-[var(--text-primary)]">
+                {asr.modelState === 'ready'
+                  ? 'Model Terpasang & Siap'
+                  : asr.modelState === 'downloading'
+                    ? 'Sedang Mengunduh & Memasang...'
+                    : 'Belum Terunduh / Standby'}
+              </span>
+            </div>
+            <p className="text-[var(--text-muted)]">
+              {asr.statusMessage ??
+                'Format INT8 ringan (~24 MB) di-cache secara permanen di browser.'}
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border-default)] pt-4">

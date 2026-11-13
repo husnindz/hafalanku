@@ -63,22 +63,46 @@ export function useLocalAsr() {
     initPromiseRef.current = (async () => {
       try {
         const { createTilawa } = await import('@tilawa/core/web');
-        const tilawa = await createTilawa({
-          tier: 'auto',
-          onProgress: (p) => {
-            const percent = Math.min(100, Math.round(p.fraction * 100));
-            setProgress({
-              loadedBytes: p.loaded,
-              totalBytes: p.total || 100,
-              percent,
-            });
-            setStatusMessage(
-              p.fromCache
-                ? 'Memuat model ASR dari cache browser...'
-                : `Mengunduh ${p.stage === 'model' ? 'model ASR' : 'referensi Al-Qur’an'} (${percent}%)...`
-            );
-          },
-        });
+
+        const handleProgress = (p: {
+          fraction: number;
+          loaded: number;
+          total: number;
+          stage?: string;
+          fromCache?: boolean;
+        }) => {
+          const percent = Math.min(100, Math.round(p.fraction * 100));
+          setProgress({
+            loadedBytes: p.loaded,
+            totalBytes: p.total || 100,
+            percent,
+          });
+          setStatusMessage(
+            p.fromCache
+              ? 'Memuat model ASR dari cache browser...'
+              : `Mengunduh ${p.stage === 'model' ? 'model ASR lokal' : 'referensi Al-Qur’an'} (${percent}%)...`
+          );
+        };
+
+        const localBase =
+          typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
+
+        let tilawa: TilawaInstance;
+        try {
+          // Prioritaskan pemuatan dari server/hosting sendiri agar cepat dan bebas blokir CDN
+          tilawa = await createTilawa({
+            tier: 'lite',
+            assetBase: localBase,
+            onProgress: handleProgress,
+          });
+        } catch (localErr) {
+          console.warn('Gagal memuat model dari origin lokal, mencoba CDN fallback...', localErr);
+          tilawa = await createTilawa({
+            tier: 'lite',
+            onProgress: handleProgress,
+          });
+        }
+
         tilawaRef.current = tilawa;
         setModelState('ready');
         setProgress({ loadedBytes: 100, totalBytes: 100, percent: 100 });

@@ -31,8 +31,8 @@ export const DEFAULT_TEST_CONFIG: MemorizationTestConfig = {
   juzEnd: 30,
   targetAyahCount: 2,
   quizConfig: {
-    guessSurah: true,
-    guessPage: true,
+    guessSurah: false,
+    guessPage: false,
     guessAyahNumber: true,
   },
 };

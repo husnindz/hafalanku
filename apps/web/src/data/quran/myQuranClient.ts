@@ -119,17 +119,39 @@ export async function fetchSurahList(): Promise<Surah[]> {
     return cached;
   }
 
-  const res = await fetchJson<MyQuranSurahItem[]>('/quran');
-  const surahs: Surah[] = res.data.map((item) => ({
-    surahNumber: item.number,
-    nameArabic: '',
-    nameLatin: item.name_latin || item.name,
-    totalAyahs: item.number_of_ayahs,
-    revelationPlace: item.revelation,
-  }));
+  try {
+    const res = await fetchJson<MyQuranSurahItem[]>('/quran');
+    const surahs: Surah[] = res.data.map((item) => ({
+      surahNumber: item.number,
+      nameArabic: '',
+      nameLatin: item.name_latin || item.name,
+      totalAyahs: item.number_of_ayahs,
+      revelationPlace: item.revelation,
+    }));
 
-  await setCachedSurahList(surahs);
-  return surahs;
+    await setCachedSurahList(surahs);
+    return surahs;
+  } catch (apiErr) {
+    // Fallback cepat ke data lokal jika koneksi ke API lambat / offline di perangkat baru
+    try {
+      const localRes = await fetch('/data/surahs.json');
+      if (localRes.ok) {
+        const localPayload = (await localRes.json()) as MyQuranResponse<MyQuranSurahItem[]>;
+        const surahs: Surah[] = localPayload.data.map((item) => ({
+          surahNumber: item.number,
+          nameArabic: '',
+          nameLatin: item.name_latin || item.name,
+          totalAyahs: item.number_of_ayahs,
+          revelationPlace: item.revelation,
+        }));
+        await setCachedSurahList(surahs);
+        return surahs;
+      }
+    } catch {
+      // Abaikan fallback lokal jika gagal
+    }
+    throw apiErr;
+  }
 }
 
 export async function fetchSurahAyahs(surahNumber: number): Promise<Ayah[]> {
