@@ -208,7 +208,7 @@ export function SettingsPage() {
           Perlindungan Privasi
         </h2>
         <p>
-          Seluruh rekaman suara, pemrosesan pengenalan bacaan (ASR), penanda
+          Seluruh rekaman suara, pemrosesan penilaian suara, penanda
           tilawah, dan riwayat latihan diproses serta disimpan secara lokal di
           perangkat Anda. Tidak ada audio atau data bacaan pribadi yang dikirim
           atau disimpan di server.

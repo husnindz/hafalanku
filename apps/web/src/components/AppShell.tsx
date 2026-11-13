@@ -82,7 +82,7 @@ export function AppShell() {
                 <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>
                   Koneksi internet terputus. Pembaca Al-Qur’an, riwayat lokal,
-                  dan model ASR yang sudah dicache tetap dapat digunakan.
+                  dan data pengenalan suara yang sudah tersimpan tetap dapat digunakan.
                 </span>
               </div>
             </StatusBanner>
@@ -95,10 +95,10 @@ export function AppShell() {
       <footer className="hidden md:block border-t border-[var(--border-default)] bg-[var(--bg-surface)] py-5 text-xs text-[var(--text-muted)]">
         <div className="mx-auto flex max-w-[960px] flex-wrap items-center justify-between gap-2 px-6">
           <p>
-            Hafalanku — Acuan Mushaf Standar Indonesia (MSI). Audio dan ASR
+            Hafalanku — Acuan Mushaf Standar Indonesia (MSI). Rekaman dan penilaian suara
             diproses secara lokal di perangkat Anda.
           </p>
-          <p>Hasil ASR adalah bantuan murojaah, bukan pengganti tashih guru.</p>
+          <p>Penilaian suara adalah bantuan murojaah, bukan pengganti tashih guru.</p>
         </div>
       </footer>
 

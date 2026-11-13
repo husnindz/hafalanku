@@ -185,7 +185,7 @@ export function SessionHistoryPage() {
                         {session.evaluationSummary &&
                           ` • Evaluasi bacaan: ${formatEvaluationStatus(session.evaluationSummary.status)}`}
                         {session.metadataResult &&
-                          ` • Kuis metadata: ${session.metadataResult.totalCorrect}/${session.metadataResult.totalAnswered}`}
+                          ` • Kuis tambahan: ${session.metadataResult.totalCorrect}/${session.metadataResult.totalAnswered}`}
                       </p>
                     </div>
 

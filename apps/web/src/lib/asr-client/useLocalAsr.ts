@@ -15,7 +15,7 @@ type TilawaInstance = Awaited<
 >;
 
 const TILAWA_DISCLAIMER =
-  'Hasil evaluasi ini adalah perkiraan pencocokan pengenalan suara (ASR lokal) untuk membantu murojaah mandiri, bukan penilaian tajwid, makhraj, ataupun pengganti tashih guru Al-Qur’an.';
+  'Hasil evaluasi ini adalah perkiraan penilaian suara untuk membantu murojaah mandiri, bukan penilaian tajwid, makhraj, ataupun pengganti tashih guru Al-Qur’an.';
 
 function compareWordRef(
   a: { surah: number; ayah: number; word: number },

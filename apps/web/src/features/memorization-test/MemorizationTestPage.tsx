@@ -575,10 +575,10 @@ export function MemorizationTestPage() {
 
           <fieldset className="space-y-2 border-t border-[var(--border-default)] pt-5">
             <legend className="text-sm font-semibold text-[var(--text-primary)]">
-              Kuis Metadata Tambahan (Opsional)
+              Kuis Tambahan (Opsional)
             </legend>
             <p className="text-xs text-[var(--text-muted)]">
-              Pertanyaan opsional seputar identitas ayat lanjutan pertama. Kuis ini terpisah dan tidak memengaruhi penilaian suara ASR.
+              Pertanyaan opsional seputar kelanjutan ayat. Kuis ini terpisah dan tidak memengaruhi penilaian suara.
             </p>
             {scopeMode === 'juz' ? (
               <div className="grid gap-2.5 pt-1 sm:grid-cols-3">
@@ -843,7 +843,7 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            {/* Bagian 3: Kuis Metadata Ayat Lanjutan Pertama (Jawaban Anda) */}
+            {/* Bagian 3: Kuis Tambahan (Jawaban Anda) */}
             {scopeMode === 'juz' ? (
               (quizConfig.guessSurah ||
                 quizConfig.guessPage ||
@@ -851,10 +851,10 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Kuis Metadata Ayat Lanjutan Pertama (Opsional)
+                      3. Kuis Tambahan (Opsional)
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      Jawab identitas ayat pertama yang Anda baca setelah ayat pemantik. Nomor ayat pemantik tidak dihitung.
+                      Jawab pertanyaan berikut mengenai bacaan lanjutan Anda (ayat pemantik tidak dihitung).
                     </p>
                   </div>
 
@@ -874,7 +874,7 @@ export function MemorizationTestPage() {
                           Nama Surah
                         </label>
                         <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                          Pada surah apa ayat pertama setelah ayat pemantik berada?
+                          Pada surah apa jawaban Anda?
                         </p>
                         <select
                           id="quiz-surah"
@@ -901,7 +901,7 @@ export function MemorizationTestPage() {
                           Nomor Halaman Mushaf (1–604)
                         </label>
                         <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                          Pada halaman berapa ayat pertama setelah pemantik dimulai?
+                          Pada halaman berapa jawaban Anda?
                         </p>
                         <input
                           id="quiz-page"
@@ -925,7 +925,7 @@ export function MemorizationTestPage() {
                           Nomor Ayat Pertama yang Dibaca
                         </label>
                         <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
-                          Masukkan nomor ayat pertama setelah ayat pemantik.
+                          Nomor ayat berapa jawaban Anda?
                         </p>
                         <input
                           id="quiz-ayah"
@@ -947,7 +947,7 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-3">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Tebak Nomor Ayat Pertama (Opsional)
+                      3. Kuis Tambahan (Opsional)
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
                       Masukkan nomor ayat pertama yang Anda baca setelah ayat pemantik. Nomor ayat pemantik tidak dihitung.
@@ -961,6 +961,9 @@ export function MemorizationTestPage() {
                     >
                       Nomor Ayat Pertama yang Dibaca
                     </label>
+                    <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                      Nomor ayat berapa jawaban Anda?
+                    </p>
                     <input
                       id="quiz-ayah"
                       type="number"
@@ -1025,7 +1028,7 @@ export function MemorizationTestPage() {
             {evaluation.status === 'unratable' && asrWarning && (
               <StatusBanner
                 tone="warning"
-                title="Transkripsi ASR Lokal Belum Tersedia"
+                title="Penilaian Suara Belum Tersedia"
               >
                 <p>{asrWarning}</p>
               </StatusBanner>
@@ -1163,7 +1166,7 @@ export function MemorizationTestPage() {
             <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
-                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat Pertama' : 'Hasil Kuis Metadata'}
+                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat Pertama' : 'Hasil Kuis Tambahan'}
                 </h3>
                 <span className="tabular-nums text-xs font-semibold text-[var(--accent-primary)]">
                   {scopeMode === 'surah' && metadataResult.guessAyahNumber
