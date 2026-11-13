@@ -263,7 +263,14 @@ export function MemorizationTestPage() {
       setResultAudioUrl(recorder.recordedAudio?.previewUrl ?? null);
 
       const prompt = selection.promptAyah;
-      const expectedSurah = surahMap.get(prompt.surahNumber);
+      const firstContinuation =
+        selection.expectedContinuation[0] ?? prompt;
+      const lastContinuation =
+        selection.expectedContinuation[
+          selection.expectedContinuation.length - 1
+        ] ?? prompt;
+      const targetSurahNumber = firstContinuation.surahNumber;
+      const expectedSurah = surahMap.get(targetSurahNumber);
 
       const result: MetadataQuizResult = {
         totalAnswered: 0,
@@ -276,14 +283,14 @@ export function MemorizationTestPage() {
         if (quizConfig.guessSurah) {
           const actualSurah = guessSurahInput ? Number(guessSurahInput) : undefined;
           answers.surahNumber = actualSurah;
-          const isCorrect = actualSurah === prompt.surahNumber;
+          const isCorrect = actualSurah === targetSurahNumber;
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessSurah = {
-            expected: prompt.surahNumber,
+            expected: targetSurahNumber,
             expectedLabel: expectedSurah
               ? `${expectedSurah.surahNumber}. ${expectedSurah.nameLatin}`
-              : `Surah ${prompt.surahNumber}`,
+              : `Surah ${targetSurahNumber}`,
             actual: actualSurah,
             actualLabel: actualSurah
               ? `${actualSurah}. ${surahMap.get(actualSurah)?.nameLatin ?? ''}`
@@ -293,12 +300,13 @@ export function MemorizationTestPage() {
         }
 
         if (quizConfig.guessPage) {
-          const allPages = [
-            prompt.pageNumberMsi,
-            ...selection.expectedContinuation.map((a) => a.pageNumberMsi),
-          ];
-          const minPage = Math.min(...allPages);
-          const maxPage = Math.max(...allPages);
+          // Halaman ayat lanjutan yang dibaca (soal pemantik tidak dihitung)
+          const continuationPages =
+            selection.expectedContinuation.length > 0
+              ? selection.expectedContinuation.map((a) => a.pageNumberMsi)
+              : [prompt.pageNumberMsi];
+          const minPage = Math.min(...continuationPages);
+          const maxPage = Math.max(...continuationPages);
           const expectedLabel =
             minPage === maxPage
               ? `Hal. ${minPage}`
@@ -330,7 +338,7 @@ export function MemorizationTestPage() {
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessPage = {
-            expected: prompt.pageNumberMsi,
+            expected: minPage,
             expectedLabel,
             actual: actualPage,
             actualLabel: cleanedInput || 'Tidak dijawab',
@@ -339,27 +347,39 @@ export function MemorizationTestPage() {
         }
 
         if (quizConfig.guessAyahNumber) {
+          const firstContinuationAyah = firstContinuation.ayahNumber;
+          const lastContinuationAyah = lastContinuation.ayahNumber;
           const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
           answers.ayahNumber = actualAyah;
-          const isCorrect = actualAyah === prompt.ayahNumber;
+          const isCorrect =
+            actualAyah !== undefined &&
+            (actualAyah === firstContinuationAyah ||
+              (actualAyah >= firstContinuationAyah &&
+                actualAyah <= lastContinuationAyah));
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessAyahNumber = {
-            expected: prompt.ayahNumber,
+            expected: firstContinuationAyah,
             actual: actualAyah,
             isCorrect,
           };
         }
       } else {
-        // scopeMode === 'surah': Hanya tebak nomor ayat
+        // scopeMode === 'surah': Hanya tebak nomor ayat lanjutan yang dibaca
         if (quizConfig.guessAyahNumber) {
+          const firstContinuationAyah = firstContinuation.ayahNumber;
+          const lastContinuationAyah = lastContinuation.ayahNumber;
           const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
           answers.ayahNumber = actualAyah;
-          const isCorrect = actualAyah === prompt.ayahNumber;
+          const isCorrect =
+            actualAyah !== undefined &&
+            (actualAyah === firstContinuationAyah ||
+              (actualAyah >= firstContinuationAyah &&
+                actualAyah <= lastContinuationAyah));
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessAyahNumber = {
-            expected: prompt.ayahNumber,
+            expected: firstContinuationAyah,
             actual: actualAyah,
             isCorrect,
           };
@@ -832,7 +852,7 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            {/* Bagian 3: Tebak Surah & Metadata Ayat Pemantik (Tepat di bawah voice) */}
+            {/* Bagian 3: Tebak Metadata Ayat Lanjutan (Jawaban Anda) */}
             {scopeMode === 'juz' ? (
               (quizConfig.guessSurah ||
                 quizConfig.guessPage ||
@@ -840,10 +860,10 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Tebak Surah &amp; Metadata Ayat Pemantik
+                      3. Tebak Metadata Ayat Lanjutan
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      Tebak metadata ayat pemantik yang baru saja Anda dengar sebelum evaluasi dinilai.
+                      Tebak metadata ayat lanjutan yang Anda baca sebelum evaluasi dinilai (ayat pemantik tidak dihitung).
                     </p>
                   </div>
 
@@ -860,7 +880,7 @@ export function MemorizationTestPage() {
                           htmlFor="quiz-surah"
                           className="block text-xs font-semibold text-[var(--text-secondary)]"
                         >
-                          Nama Surah (ayat pemantik)
+                          Nama Surah
                         </label>
                         <select
                           id="quiz-surah"
@@ -884,14 +904,14 @@ export function MemorizationTestPage() {
                           htmlFor="quiz-page"
                           className="block text-xs font-semibold text-[var(--text-secondary)]"
                         >
-                          Nomor Halaman Mushaf (1–604)
+                          Halaman Mushaf (1–604)
                         </label>
                         <input
                           id="quiz-page"
                           type="text"
                           value={guessPageInput}
                           onChange={(e) => setGuessPageInput(e.target.value)}
-                          placeholder="Contoh: 483 atau 483-484"
+                          placeholder="Contoh: 347 atau 347-348"
                           className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
                         />
                       </div>
@@ -903,7 +923,7 @@ export function MemorizationTestPage() {
                           htmlFor="quiz-ayah"
                           className="block text-xs font-semibold text-[var(--text-secondary)]"
                         >
-                          Nomor Ayat Pemantik
+                          Nomor Ayat Lanjutan
                         </label>
                         <input
                           id="quiz-ayah"
@@ -912,7 +932,7 @@ export function MemorizationTestPage() {
                           max={286}
                           value={guessAyahInput}
                           onChange={(e) => setGuessAyahInput(e.target.value)}
-                          placeholder="Contoh: 1"
+                          placeholder="Contoh: 75"
                           className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
                         />
                       </div>
@@ -925,10 +945,10 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-3">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Tebak Nomor Ayat Pemantik
+                      3. Tebak Nomor Ayat Lanjutan
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      Tebak nomor ayat pemantik yang baru saja Anda dengar sebelum evaluasi dinilai.
+                      Tebak nomor ayat lanjutan yang Anda baca sebelum evaluasi dinilai (ayat pemantik tidak dihitung).
                     </p>
                   </div>
 
@@ -937,7 +957,7 @@ export function MemorizationTestPage() {
                       htmlFor="quiz-ayah"
                       className="block text-xs font-semibold text-[var(--text-secondary)]"
                     >
-                      Nomor Ayat Pemantik
+                      Nomor Ayat Lanjutan
                     </label>
                     <input
                       id="quiz-ayah"
@@ -946,7 +966,7 @@ export function MemorizationTestPage() {
                       max={286}
                       value={guessAyahInput}
                       onChange={(e) => setGuessAyahInput(e.target.value)}
-                      placeholder="Contoh: 1"
+                      placeholder="Contoh: 75"
                       className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
                     />
                   </div>
@@ -1108,7 +1128,7 @@ export function MemorizationTestPage() {
             <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
-                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat' : 'Hasil Kuis Metadata'}
+                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat Lanjutan' : 'Hasil Kuis Metadata'}
                 </h3>
                 <span className="tabular-nums text-xs font-semibold text-[var(--accent-primary)]">
                   {scopeMode === 'surah' && metadataResult.guessAyahNumber
@@ -1156,7 +1176,7 @@ export function MemorizationTestPage() {
 
                 {metadataResult.guessAyahNumber && (
                   <div className="flex flex-wrap justify-between gap-2 rounded-[8px] bg-[var(--bg-canvas)] px-3 py-2 text-sm">
-                    <span>Nomor Ayat Pemantik</span>
+                    <span>Nomor Ayat Lanjutan</span>
                     <span
                       className={
                         metadataResult.guessAyahNumber.isCorrect

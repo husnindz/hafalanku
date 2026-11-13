@@ -67,11 +67,10 @@ export function SettingsPage() {
               htmlFor="pref-threshold"
               className="text-sm font-semibold text-[var(--text-primary)]"
             >
-              Ambang Confidence ASR
+              Sensitivitas Pengenalan Suara
             </label>
             <p className="text-xs text-[var(--text-muted)]">
-              Bacaan di bawah ambang ini ditandai sebagai &ldquo;Tidak dapat
-              dinilai&rdquo; agar tidak langsung dinilai salah.
+              Tingkat ketelitian pencocokan suara dengan teks ayat.
             </p>
           </div>
           <select
@@ -84,7 +83,7 @@ export function SettingsPage() {
             }
             className="tabular-nums rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm"
           >
-            <option value={0.35}>35% (Longgar)</option>
+            <option value={0.35}>35% (Toleran / Longgar)</option>
             <option value={0.45}>45% (Standar)</option>
             <option value={0.6}>60% (Ketat)</option>
           </select>
@@ -119,15 +118,15 @@ export function SettingsPage() {
           </button>
         </div>
 
-        {/* Status & Unduh Model AI Lokal */}
+        {/* Status & Unduh Data Suara Lokal */}
         <div className="border-t border-[var(--border-default)] pt-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-[var(--text-primary)]">
-                Model AI Pengenalan Suara (Tilawa ONNX)
+                Pengenalan Suara (AI Offline)
               </p>
               <p className="text-xs text-[var(--text-muted)]">
-                Model lokal di browser untuk evaluasi hafalan secara privat dan offline.
+                Pemrosesan suara lokal di perangkat untuk evaluasi hafalan secara privat dan offline.
               </p>
             </div>
             <button
@@ -144,12 +143,12 @@ export function SettingsPage() {
               ) : asr.modelState === 'ready' ? (
                 <>
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Model Siap (Verifikasi)</span>
+                  <span>Data Siap</span>
                 </>
               ) : (
                 <>
                   <Download className="h-3.5 w-3.5" />
-                  <span>Unduh &amp; Pasang Model</span>
+                  <span>Unduh Data</span>
                 </>
               )}
             </button>
@@ -168,15 +167,18 @@ export function SettingsPage() {
               />
               <span className="font-semibold text-[var(--text-primary)]">
                 {asr.modelState === 'ready'
-                  ? 'Model Terpasang & Siap'
+                  ? 'Siap Digunakan'
                   : asr.modelState === 'downloading'
                     ? 'Mengunduh data...'
-                    : 'Belum Terunduh / Standby'}
+                    : 'Belum Terunduh'}
               </span>
             </div>
             <p className="text-[var(--text-muted)]">
-              {asr.statusMessage ??
-                'Format INT8 ringan (~24 MB) di-cache secara permanen di browser.'}
+              {asr.modelState === 'ready'
+                ? 'Data pengenalan suara sudah tersimpan di perangkat Anda dan siap dipakai secara offline.'
+                : asr.modelState === 'downloading'
+                  ? 'Sedang menyiapkan data pengenalan suara di latar belakang...'
+                  : 'Data akan otomatis terunduh saat Anda membuka menu Tes Hafalan.'}
             </p>
           </div>
         </div>

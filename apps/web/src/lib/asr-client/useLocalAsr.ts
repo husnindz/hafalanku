@@ -100,30 +100,16 @@ export async function loadGlobalAsrModel(): Promise<TilawaInstance | null> {
         });
       };
 
-      const localBase =
-        typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
-
-      let tilawa: TilawaInstance;
-      try {
-        // Prioritaskan pemuatan dari server/hosting sendiri agar cepat dan bebas blokir CDN
-        tilawa = await createTilawa({
-          tier: 'lite',
-          assetBase: localBase,
-          onProgress: handleProgress,
-        });
-      } catch (localErr) {
-        console.warn('Gagal memuat model dari origin lokal, mencoba CDN fallback...', localErr);
-        tilawa = await createTilawa({
-          tier: 'lite',
-          onProgress: handleProgress,
-        });
-      }
+      const tilawa = await createTilawa({
+        tier: 'lite',
+        onProgress: handleProgress,
+      });
 
       globalTilawa = tilawa;
       updateStore({
         modelState: 'ready',
         progress: { loadedBytes: 100, totalBytes: 100, percent: 100 },
-        statusMessage: `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`,
+        statusMessage: 'Fitur pengenalan suara siap digunakan.',
       });
       return tilawa;
     } catch (err) {
@@ -337,7 +323,7 @@ export function useLocalAsr() {
         session.dispose();
         updateStore({
           modelState: 'ready',
-          statusMessage: `Model ASR lokal siap (${tilawa.model.id}, ${tilawa.model.backend}).`,
+          statusMessage: 'Fitur pengenalan suara siap digunakan.',
         });
 
         // Jika model tidak berhasil mengunci bacaan atau confidence di bawah ambang:
