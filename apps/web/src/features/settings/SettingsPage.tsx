@@ -215,7 +215,7 @@ export function SettingsPage() {
         </p>
         <div className="pt-2 border-t border-[var(--border-default)] flex items-center justify-between text-[11px] text-[var(--text-muted)]">
           <span>Hafalanku • Mushaf Standar Indonesia</span>
-          <span className="font-mono font-medium">v1.0.0</span>
+          <span className="font-mono font-medium">v1.0.1</span>
         </div>
       </section>
     </div>

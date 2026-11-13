@@ -1,6 +1,6 @@
 {
   "name": "hafalanku-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Monorepo Hafalanku: Aplikasi murojaah dan tes sambung ayat Al-Qur'an berbasis MSI dengan ASR lokal di browser.",
   "workspaces": [

@@ -236,11 +236,22 @@ export function useLocalAsr() {
           collectedEvents.push(ev);
         });
 
+        // Lead-in hening 250ms (4000 sampel pada 16kHz) dan trailing hening 250ms
+        // untuk memberikan baseline akustik bersih pada layer konvolusi & left-context Zipformer
+        const leadIn = new Float32Array(4000);
+        const trail = new Float32Array(4000);
+        const paddedPcm = new Float32Array(
+          leadIn.length + pcm16k.length + trail.length
+        );
+        paddedPcm.set(leadIn, 0);
+        paddedPcm.set(pcm16k, leadIn.length);
+        paddedPcm.set(trail, leadIn.length + pcm16k.length);
+
         // Push PCM dalam potongan 300ms (4800 sampel pada 16kHz)
         const chunkSize = 4800;
-        for (let i = 0; i < pcm16k.length; i += chunkSize) {
+        for (let i = 0; i < paddedPcm.length; i += chunkSize) {
           await session.pushAudio(
-            pcm16k.subarray(i, Math.min(pcm16k.length, i + chunkSize)),
+            paddedPcm.subarray(i, Math.min(paddedPcm.length, i + chunkSize)),
             16000
           );
         }
@@ -374,6 +385,34 @@ export function useLocalAsr() {
           }
           const key = `${m.location.surah}:${m.location.ayah}:${m.location.word}`;
           mistakeMap.set(key, m.errorClass);
+        }
+
+        // Normalisasi kata awal:
+        // Jika model mengunci posisi pada kata ke-2 atau ke-3 di ayat pertama,
+        // dan engine Tilawa TIDAK melaporkan adanya kesalahan (omitted_word / wrong_word)
+        // pada kata-kata pembuka tersebut, maka kata pembuka tersebut adalah bagian sah
+        // dari bacaan pengguna yang dibaca saat fase onset.
+        if (
+          firstObservedWord &&
+          firstObservedWord.surah === firstAyah.surahNumber &&
+          firstObservedWord.ayah === firstAyah.ayahNumber &&
+          firstObservedWord.word <= 3
+        ) {
+          let hasExplicitMistakeAtStart = false;
+          for (let w = 1; w < firstObservedWord.word; w++) {
+            const checkKey = `${firstAyah.surahNumber}:${firstAyah.ayahNumber}:${w}`;
+            if (mistakeMap.has(checkKey)) {
+              hasExplicitMistakeAtStart = true;
+              break;
+            }
+          }
+          if (!hasExplicitMistakeAtStart) {
+            firstObservedWord = {
+              surah: firstAyah.surahNumber,
+              ayah: firstAyah.ayahNumber,
+              word: 1,
+            };
+          }
         }
 
         const wordAlignments: WordAlignmentItem[] = [];
