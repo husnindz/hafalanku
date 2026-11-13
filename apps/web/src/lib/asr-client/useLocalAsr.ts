@@ -145,9 +145,26 @@ export function useLocalAsr() {
       try {
         const firstAyah = expectedAyahs[0];
         const lastAyah = expectedAyahs[expectedAyahs.length - 1];
+        if (!firstAyah || !lastAyah) {
+          return {
+            summary: {
+              status: 'unratable',
+              confidence: 0,
+              confidenceThreshold,
+              recognizedTranscript: '',
+              normalizedTranscript: '',
+              expectedAyahs: expectedSummary,
+              wordAlignments: [],
+              matchedWordCount: 0,
+              expectedWordCount: 0,
+              missedCount: 0,
+              substitutedCount: 0,
+              extraCount: 0,
+              disclaimer: TILAWA_DISCLAIMER,
+            },
+          };
+        }
         const sameSurah =
-          firstAyah &&
-          lastAyah &&
           expectedAyahs.every((a) => a.surahNumber === firstAyah.surahNumber);
 
         const session = sameSurah
@@ -196,28 +213,59 @@ export function useLocalAsr() {
         }>;
 
         const positionEvents = allEvents.filter((e) => e.type === 'position');
+        const lockedPositionEvents = positionEvents.filter(
+          (e) => e.state === 'locked'
+        );
+        const effectiveEvents =
+          lockedPositionEvents.length > 0
+            ? lockedPositionEvents
+            : positionEvents.filter((e) => e.state !== 'lost');
+
         const mistakes = session.mistakes();
 
+        const firstAyahRef = {
+          surah: firstAyah.surahNumber,
+          ayah: firstAyah.ayahNumber,
+          word: 1,
+        };
+        const lastAyahWordsCount =
+          lastAyah.textUthmaniMsi.trim().split(/\s+/).filter(Boolean).length;
+        const lastAyahRef = {
+          surah: lastAyah.surahNumber,
+          ayah: lastAyah.ayahNumber,
+          word: lastAyahWordsCount,
+        };
+
         let maxConfidence = 0;
-        let maxReachedEnd: { surah: number; ayah: number; word: number } | null =
+        let lastObservedWord: { surah: number; ayah: number; word: number } | null =
           null;
-        let minReachedStart: {
+        let firstObservedWord: {
           surah: number;
           ayah: number;
           word: number;
         } | null = null;
+        const observedWordKeys = new Set<string>();
 
-        for (const ev of positionEvents) {
+        for (const ev of effectiveEvents) {
           const top = ev.observed?.[0];
           if (!top) continue;
           if (top.confidence > maxConfidence) {
             maxConfidence = top.confidence;
           }
-          if (!minReachedStart || compareWordRef(top.span.start, minReachedStart) < 0) {
-            minReachedStart = top.span.start;
-          }
-          if (!maxReachedEnd || compareWordRef(top.span.end, maxReachedEnd) > 0) {
-            maxReachedEnd = top.span.end;
+          if (top.confidence >= confidenceThreshold) {
+            if (
+              compareWordRef(top.word, firstAyahRef) >= 0 &&
+              compareWordRef(top.word, lastAyahRef) <= 0
+            ) {
+              const key = `${top.word.surah}:${top.word.ayah}:${top.word.word}`;
+              observedWordKeys.add(key);
+              if (!firstObservedWord || compareWordRef(top.word, firstObservedWord) < 0) {
+                firstObservedWord = top.word;
+              }
+              if (!lastObservedWord || compareWordRef(top.word, lastObservedWord) > 0) {
+                lastObservedWord = top.word;
+              }
+            }
           }
         }
 
@@ -228,7 +276,7 @@ export function useLocalAsr() {
         );
 
         // Jika model tidak berhasil mengunci bacaan atau confidence di bawah ambang
-        if (!maxReachedEnd || maxConfidence < confidenceThreshold) {
+        if (!lastObservedWord || maxConfidence < confidenceThreshold) {
           return {
             summary: {
               status: 'unratable',
@@ -309,10 +357,10 @@ export function useLocalAsr() {
                 ayahNumber: ref.ayah,
               });
             } else if (
-              minReachedStart &&
-              maxReachedEnd &&
-              compareWordRef(ref, minReachedStart) >= 0 &&
-              compareWordRef(ref, maxReachedEnd) <= 0
+              firstObservedWord &&
+              lastObservedWord &&
+              compareWordRef(ref, firstObservedWord) >= 0 &&
+              compareWordRef(ref, lastObservedWord) <= 0
             ) {
               matchedWordCount++;
               wordAlignments.push({
@@ -348,7 +396,7 @@ export function useLocalAsr() {
             status,
             confidence: maxConfidence,
             confidenceThreshold,
-            recognizedTranscript: `Terdeteksi hingga ${maxReachedEnd.surah}:${maxReachedEnd.ayah} kata ke-${maxReachedEnd.word}`,
+            recognizedTranscript: `Terdeteksi hingga ${lastObservedWord.surah}:${lastObservedWord.ayah} kata ke-${lastObservedWord.word}`,
             normalizedTranscript: '',
             expectedAyahs: expectedSummary,
             wordAlignments,

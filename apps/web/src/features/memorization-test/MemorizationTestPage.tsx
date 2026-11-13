@@ -222,27 +222,23 @@ export function MemorizationTestPage() {
     setAsrWarning(null);
     setIsEvaluating(true);
 
-    // Berikan jeda waktu visual minimal agar animasi tombol loading dan pop-up terlihat jelas
-    const minWaitPromise = new Promise((resolve) => setTimeout(resolve, 850));
-
     try {
+      // Tunggu minimal 600ms agar status teks tombol 'Mengirim Jawaban...' terlihat jelas
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
       let evalSummary: RecitationEvaluationSummary;
 
       if (recorder.recordedAudio) {
-        const [res] = await Promise.all([
-          asr.evaluateRecordedPcm(
-            recorder.recordedAudio.pcm16k,
-            selection.expectedContinuation,
-            preferences.asrConfidenceThreshold
-          ),
-          minWaitPromise,
-        ]);
+        const res = await asr.evaluateRecordedPcm(
+          recorder.recordedAudio.pcm16k,
+          selection.expectedContinuation,
+          preferences.asrConfidenceThreshold
+        );
         evalSummary = res.summary;
         if (res.warning) {
           setAsrWarning(res.warning);
         }
       } else {
-        await minWaitPromise;
         evalSummary = evaluateRecitation({
           recognizedTranscript: '',
           expectedAyahs: selection.expectedContinuation,
@@ -606,7 +602,11 @@ export function MemorizationTestPage() {
               onClick={startTest}
               className="inline-flex min-h-[46px] items-center gap-2 rounded-[10px] bg-[var(--accent-primary)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
             >
-              <Play className="h-4 w-4" aria-hidden="true" />
+              {isStartingTest ? (
+                <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
+              ) : (
+                <Play className="h-4 w-4" aria-hidden="true" />
+              )}
               <span>{isStartingTest ? 'Memilih Ayat...' : 'Mulai Tes'}</span>
             </button>
           </div>
@@ -859,46 +859,20 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            {/* Indikator Loading Saat Mengevaluasi Jawaban */}
-            {isEvaluating && (
-              <div className="rounded-[12px] border border-[var(--accent-primary)]/40 bg-[var(--accent-soft)] p-4 sm:p-5 text-center space-y-2.5 animate-pulse">
-                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-primary)] text-white">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-[var(--accent-primary)]">
-                    Sedang Mengevaluasi Jawaban &amp; Rekaman Suara...
-                  </h4>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                    Model AI lokal (Tilawa ONNX) sedang mencocokkan kata demi kata bacaan Anda secara privat langsung di browser tanpa mengirim data ke server.
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* Tombol Aksi Bawah */}
             <div className="flex justify-end border-t border-[var(--border-default)] pt-4">
               <button
                 type="button"
                 disabled={isEvaluating || recorder.status === 'recording'}
                 onClick={handleEvaluateAndSubmit}
-                className={`w-full sm:w-auto inline-flex min-h-[46px] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--accent-primary)] px-6 py-2.5 text-sm font-semibold text-white transition-all ${
-                  isEvaluating
-                    ? 'cursor-wait opacity-85 ring-4 ring-[var(--accent-soft)]'
-                    : 'hover:bg-[var(--accent-hover)]'
-                } disabled:opacity-50`}
+                className="w-full sm:w-auto inline-flex min-h-[46px] items-center justify-center gap-2 rounded-[10px] bg-[var(--accent-primary)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-50"
               >
                 {isEvaluating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
-                    <span>Mengevaluasi Jawaban...</span>
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
                 ) : (
-                  <>
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                    <span>Kirim Jawaban &amp; Evaluasi</span>
-                  </>
+                  <Check className="h-4 w-4" aria-hidden="true" />
                 )}
+                <span>{isEvaluating ? 'Mengirim Jawaban...' : 'Kirim Jawaban & Evaluasi'}</span>
               </button>
             </div>
           </div>
@@ -1134,32 +1108,6 @@ export function MemorizationTestPage() {
             })()}
           </div>
         </section>
-      )}
-
-      {/* Pop-up Modal Loading Saat Mengirim Jawaban & Evaluasi */}
-      {isEvaluating && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-        >
-          <div className="w-full max-w-sm rounded-[16px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 shadow-2xl text-center space-y-4">
-            <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-primary)] ring-8 ring-[var(--accent-soft)]/50">
-              <Loader2 className="h-7 w-7 animate-spin" />
-            </div>
-            <div className="space-y-1.5">
-              <h3 className="text-base font-bold text-[var(--text-primary)]">
-                Mengevaluasi Hafalan &amp; Jawaban...
-              </h3>
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                Model AI lokal (Tilawa ONNX) sedang mencocokkan bacaan suara dan memeriksa tebakan Anda secara langsung di perangkat.
-              </p>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
-              <div className="h-full w-2/3 bg-[var(--accent-primary)] animate-pulse rounded-full" />
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
