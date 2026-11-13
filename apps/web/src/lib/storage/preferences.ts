@@ -2,6 +2,40 @@ import type { LastReadPosition, UserPreferences } from '@hafalanku/quran-types';
 
 const PREFERENCES_KEY = 'hafalanku_preferences_v1';
 const LAST_READ_KEY = 'hafalanku_last_read_v1';
+const LAST_READER_STATE_KEY = 'hafalanku_last_reader_state_v1';
+const TEST_CONFIG_KEY = 'hafalanku_test_config_v1';
+
+export interface LastReaderState {
+  mode: 'page' | 'ayah';
+  page: number;
+  surah: number;
+}
+
+export interface MemorizationTestConfig {
+  scopeMode: 'juz' | 'surah';
+  selectedSurah: number;
+  juzStart: number;
+  juzEnd: number;
+  targetAyahCount: number;
+  quizConfig: {
+    guessSurah: boolean;
+    guessPage: boolean;
+    guessAyahNumber: boolean;
+  };
+}
+
+export const DEFAULT_TEST_CONFIG: MemorizationTestConfig = {
+  scopeMode: 'juz',
+  selectedSurah: 1,
+  juzStart: 1,
+  juzEnd: 30,
+  targetAyahCount: 2,
+  quizConfig: {
+    guessSurah: true,
+    guessPage: true,
+    guessAyahNumber: true,
+  },
+};
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   arabicFontSizePx: 30,
@@ -12,6 +46,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   darkMode: false,
   defaultTargetAyahCount: 2,
   asrConfidenceThreshold: 0.45,
+  defaultReaderMode: 'page',
 };
 
 export function loadPreferences(): UserPreferences {
@@ -59,6 +94,8 @@ export function loadPreferences(): UserPreferences {
         typeof parsed.asrConfidenceThreshold === 'number'
           ? Math.min(0.85, Math.max(0.2, parsed.asrConfidenceThreshold))
           : DEFAULT_PREFERENCES.asrConfidenceThreshold,
+      defaultReaderMode:
+        parsed.defaultReaderMode === 'ayah' ? 'ayah' : 'page',
     };
   } catch {
     return DEFAULT_PREFERENCES;
@@ -105,6 +142,98 @@ export function loadLastRead(): LastReadPosition | null {
 export function saveLastRead(pos: LastReadPosition): void {
   try {
     window.localStorage.setItem(LAST_READ_KEY, JSON.stringify(pos));
+  } catch {
+    // Abaikan jika storage diblokir
+  }
+}
+
+export function loadLastReaderState(): LastReaderState {
+  try {
+    const raw = window.localStorage.getItem(LAST_READER_STATE_KEY);
+    if (!raw) {
+      const lr = loadLastRead();
+      return {
+        mode: lr?.mode ?? 'page',
+        page: lr?.page ?? 1,
+        surah: lr?.surah ?? 1,
+      };
+    }
+    const parsed = JSON.parse(raw) as Partial<LastReaderState>;
+    return {
+      mode: parsed.mode === 'ayah' ? 'ayah' : 'page',
+      page: typeof parsed.page === 'number' && parsed.page >= 1 && parsed.page <= 604 ? parsed.page : 1,
+      surah: typeof parsed.surah === 'number' && parsed.surah >= 1 && parsed.surah <= 114 ? parsed.surah : 1,
+    };
+  } catch {
+    return { mode: 'page', page: 1, surah: 1 };
+  }
+}
+
+export function saveLastReaderState(state: Partial<LastReaderState>): void {
+  try {
+    const current = loadLastReaderState();
+    const updated: LastReaderState = { ...current, ...state };
+    window.localStorage.setItem(LAST_READER_STATE_KEY, JSON.stringify(updated));
+  } catch {
+    // Abaikan jika storage diblokir
+  }
+}
+
+export function loadTestConfig(): MemorizationTestConfig {
+  try {
+    const raw = window.localStorage.getItem(TEST_CONFIG_KEY);
+    if (!raw) return DEFAULT_TEST_CONFIG;
+    const parsed = JSON.parse(raw) as Partial<MemorizationTestConfig>;
+    return {
+      scopeMode: parsed.scopeMode === 'surah' ? 'surah' : 'juz',
+      selectedSurah:
+        typeof parsed.selectedSurah === 'number' && parsed.selectedSurah >= 1 && parsed.selectedSurah <= 114
+          ? parsed.selectedSurah
+          : DEFAULT_TEST_CONFIG.selectedSurah,
+      juzStart:
+        typeof parsed.juzStart === 'number' && parsed.juzStart >= 1 && parsed.juzStart <= 30
+          ? parsed.juzStart
+          : DEFAULT_TEST_CONFIG.juzStart,
+      juzEnd:
+        typeof parsed.juzEnd === 'number' && parsed.juzEnd >= 1 && parsed.juzEnd <= 30
+          ? parsed.juzEnd
+          : DEFAULT_TEST_CONFIG.juzEnd,
+      targetAyahCount:
+        typeof parsed.targetAyahCount === 'number' && parsed.targetAyahCount >= 1 && parsed.targetAyahCount <= 5
+          ? parsed.targetAyahCount
+          : DEFAULT_TEST_CONFIG.targetAyahCount,
+      quizConfig: {
+        guessSurah:
+          typeof parsed.quizConfig?.guessSurah === 'boolean'
+            ? parsed.quizConfig.guessSurah
+            : DEFAULT_TEST_CONFIG.quizConfig.guessSurah,
+        guessPage:
+          typeof parsed.quizConfig?.guessPage === 'boolean'
+            ? parsed.quizConfig.guessPage
+            : DEFAULT_TEST_CONFIG.quizConfig.guessPage,
+        guessAyahNumber:
+          typeof parsed.quizConfig?.guessAyahNumber === 'boolean'
+            ? parsed.quizConfig.guessAyahNumber
+            : DEFAULT_TEST_CONFIG.quizConfig.guessAyahNumber,
+      },
+    };
+  } catch {
+    return DEFAULT_TEST_CONFIG;
+  }
+}
+
+export function saveTestConfig(config: Partial<MemorizationTestConfig>): void {
+  try {
+    const current = loadTestConfig();
+    const updated: MemorizationTestConfig = {
+      ...current,
+      ...config,
+      quizConfig: {
+        ...current.quizConfig,
+        ...(config.quizConfig ?? {}),
+      },
+    };
+    window.localStorage.setItem(TEST_CONFIG_KEY, JSON.stringify(updated));
   } catch {
     // Abaikan jika storage diblokir
   }

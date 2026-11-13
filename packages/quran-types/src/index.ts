@@ -86,7 +86,9 @@ export interface MetadataQuizResult {
   };
   guessPage?: {
     expected: number;
+    expectedLabel?: string;
     actual?: number;
+    actualLabel?: string;
     isCorrect: boolean;
   };
   guessAyahNumber?: {
@@ -163,6 +165,7 @@ export interface UserPreferences {
   darkMode: boolean;
   defaultTargetAyahCount: number;
   asrConfidenceThreshold: number;
+  defaultReaderMode?: 'page' | 'ayah';
 }
 
 export interface LastReadPosition {

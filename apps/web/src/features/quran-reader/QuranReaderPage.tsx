@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Bookmark,
+  Check,
   ChevronLeft,
   ChevronRight,
   Minus,
-  Moon,
   Plus,
   Settings2,
-  Sun,
   Volume2,
   VolumeX,
   X,
@@ -21,7 +20,12 @@ import {
   getSurahAyahsData,
   getSurahMap,
 } from '../../data/quran/datasetAdapter';
-import { loadLastRead, saveLastRead } from '../../lib/storage/preferences';
+import {
+  loadLastRead,
+  loadLastReaderState,
+  saveLastRead,
+  saveLastReaderState,
+} from '../../lib/storage/preferences';
 import {
   createTilawahBookmark,
   listTilawahBookmarks,
@@ -35,11 +39,12 @@ export function QuranReaderPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const lastRead = useMemo(() => loadLastRead(), []);
+  const savedState = useMemo(() => loadLastReaderState(), []);
   const modeParam = searchParams.get('mode');
   const mode: 'page' | 'ayah' =
     modeParam === 'page' || modeParam === 'ayah'
       ? modeParam
-      : lastRead?.mode ?? 'ayah';
+      : (preferences.defaultReaderMode ?? savedState.mode ?? 'page');
 
   const availablePages = useMemo(
     () => (dataset ? getAvailablePagesMsi(dataset) : []),
@@ -53,24 +58,23 @@ export function QuranReaderPage() {
   const selectedSurah = useMemo(() => {
     const param = Number(searchParams.get('surah'));
     if (dataset && surahMap.has(param)) return param;
-    if (!searchParams.get('surah') && lastRead && surahMap.has(lastRead.surah)) {
-      return lastRead.surah;
+    if (!searchParams.get('surah') && surahMap.has(savedState.surah)) {
+      return savedState.surah;
     }
     return dataset?.surahs[0]?.surahNumber ?? 1;
-  }, [dataset, lastRead, searchParams, surahMap]);
+  }, [dataset, savedState.surah, searchParams, surahMap]);
 
   const selectedPage = useMemo(() => {
     const param = Number(searchParams.get('page'));
     if (availablePages.includes(param)) return param;
     if (
       !searchParams.get('page') &&
-      lastRead &&
-      availablePages.includes(lastRead.page)
+      availablePages.includes(savedState.page)
     ) {
-      return lastRead.page;
+      return savedState.page;
     }
     return availablePages[0] ?? 1;
-  }, [availablePages, lastRead, searchParams]);
+  }, [availablePages, savedState.page, searchParams]);
 
   const highlightedAyah = Number(searchParams.get('ayah')) || null;
 
@@ -89,8 +93,23 @@ export function QuranReaderPage() {
   const [newBookmarkLabel, setNewBookmarkLabel] = useState('');
   const [bookmarkFeedback, setBookmarkFeedback] = useState<string | null>(null);
   const [visibilityHint, setVisibilityHint] = useState<string | null>(null);
+  const [defaultSaveMessage, setDefaultSaveMessage] = useState<string | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const settingsPanelRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSaveAsDefault = () => {
+    updatePreferences({
+      defaultReaderMode: mode,
+      showPageImage: preferences.showPageImage,
+      showPageText: preferences.showPageText,
+      showPageAudio: preferences.showPageAudio,
+      showTranslation: preferences.showTranslation,
+      arabicFontSizePx: preferences.arabicFontSizePx,
+    });
+    saveLastReaderState({ mode, page: selectedPage, surah: selectedSurah });
+    setDefaultSaveMessage('Pengaturan tampilan berhasil disimpan sebagai default!');
+    setTimeout(() => setDefaultSaveMessage(null), 3000);
+  };
 
   const loadContent = useCallback(async () => {
     if (!dataset) return;
@@ -106,6 +125,11 @@ export function QuranReaderPage() {
         setPageBundle(bundle);
         const firstAyah = bundle.ayahs[0];
         if (firstAyah) {
+          saveLastReaderState({
+            mode: 'page',
+            page: selectedPage,
+            surah: firstAyah.surahNumber,
+          });
           saveLastRead({
             mode: 'page',
             page: selectedPage,
@@ -123,6 +147,11 @@ export function QuranReaderPage() {
             ? ayahs.find((a) => a.ayahNumber === highlightedAyah)
             : undefined) ?? ayahs[0];
         if (targetAyah) {
+          saveLastReaderState({
+            mode: 'ayah',
+            page: targetAyah.pageNumberMsi,
+            surah: selectedSurah,
+          });
           saveLastRead({
             mode: 'ayah',
             page: targetAyah.pageNumberMsi,
@@ -180,6 +209,7 @@ export function QuranReaderPage() {
   }, [isBookmarkOpen, isSettingsOpen]);
 
   const setMode = (nextMode: 'page' | 'ayah') => {
+    saveLastReaderState({ mode: nextMode });
     const next = new URLSearchParams(searchParams);
     next.set('mode', nextMode);
     if (nextMode === 'page') {
@@ -191,11 +221,13 @@ export function QuranReaderPage() {
         targetAyah?.pageNumberMsi ??
         (Number(next.get('page')) || availablePages[0]);
       if (targetPage) {
+        saveLastReaderState({ page: targetPage });
         next.set('page', String(targetPage));
       }
     } else if (nextMode === 'ayah') {
       const firstOnPage = pageBundle?.ayahs[0];
       if (firstOnPage) {
+        saveLastReaderState({ surah: firstOnPage.surahNumber });
         next.set('surah', String(firstOnPage.surahNumber));
         next.set('ayah', String(firstOnPage.ayahNumber));
       }
@@ -208,6 +240,7 @@ export function QuranReaderPage() {
     if (idx === -1) return;
     const nextPage = availablePages[idx + delta];
     if (nextPage === undefined) return;
+    saveLastReaderState({ mode: 'page', page: nextPage });
     setSearchParams({ mode: 'page', page: String(nextPage) });
   };
 
@@ -219,10 +252,12 @@ export function QuranReaderPage() {
     if (idx === -1) return;
     const nextSurah = dataset.surahs[idx + delta];
     if (!nextSurah) return;
+    saveLastReaderState({ mode: 'ayah', surah: nextSurah.surahNumber });
     setSearchParams({ mode: 'ayah', surah: String(nextSurah.surahNumber) });
   };
 
   const handleSurahSelect = (surahNum: number) => {
+    saveLastReaderState({ mode: 'ayah', surah: surahNum });
     setSearchParams({ mode: 'ayah', surah: String(surahNum) });
   };
 
@@ -327,7 +362,7 @@ export function QuranReaderPage() {
       {/* Lock bar mengambang ringkas (kiri: geser, tengah: keterangan/dropdown, kanan: geser + mode malam + pengaturan) */}
       <div
         ref={settingsPanelRef}
-        className="sticky top-16 z-10 -mx-4 border-y border-[var(--border-default)] bg-[var(--bg-surface)]/95 px-2.5 py-2 backdrop-blur-xs sm:mx-0 sm:rounded-[12px] sm:border sm:px-3"
+        className="sticky top-16 z-10 -mx-4 border-y border-[var(--border-default)] bg-[var(--bg-surface)] px-2.5 py-2 shadow-xs sm:mx-0 sm:rounded-[12px] sm:border sm:px-3"
       >
         <div className="flex items-center justify-between gap-1.5">
           {/* Al-Qur'an dibaca dari kanan ke kiri: tombol kiri (<) menuju halaman/surah berikutnya (+1) */}
@@ -412,26 +447,6 @@ export function QuranReaderPage() {
               className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-canvas)] text-[var(--text-primary)] disabled:opacity-35 hover:bg-[var(--bg-subtle)]"
             >
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                updatePreferences({ darkMode: !preferences.darkMode })
-              }
-              aria-label={
-                preferences.darkMode
-                  ? 'Aktifkan mode terang'
-                  : 'Aktifkan mode malam'
-              }
-              title={preferences.darkMode ? 'Mode Terang' : 'Mode Malam'}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-[var(--border-default)] bg-[var(--bg-canvas)] text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
-            >
-              {preferences.darkMode ? (
-                <Sun className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Moon className="h-4 w-4" aria-hidden="true" />
-              )}
             </button>
 
             <button
@@ -700,6 +715,22 @@ export function QuranReaderPage() {
                 </label>
               </div>
             )}
+
+            <div className="border-t border-[var(--border-default)] pt-3 space-y-2">
+              <button
+                type="button"
+                onClick={handleSaveAsDefault}
+                className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-[8px] bg-[var(--accent-primary)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--accent-hover)]"
+              >
+                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Simpan Tampilan Sebagai Bawaan</span>
+              </button>
+              {defaultSaveMessage && (
+                <p className="text-center text-[11px] font-semibold text-[var(--status-match)]">
+                  {defaultSaveMessage}
+                </p>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -77,6 +77,7 @@ export function useAudioRecorder() {
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
   const previewUrlRef = useRef<string | null>(null);
+  const lastLevelUpdateRef = useRef<number>(0);
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -196,8 +197,13 @@ export function useAudioRecorder() {
         copy.set(input);
         pcmChunksRef.current.push(copy);
 
-        const rms = computeAudioRms(copy);
-        setMicLevel(Math.min(100, Math.round(rms * 400)));
+        // Throttle pembaruan UI level mikrofon (maksimal tiap 130ms) agar thread utama mobile tidak lag
+        const now = performance.now();
+        if (now - lastLevelUpdateRef.current > 130) {
+          lastLevelUpdateRef.current = now;
+          const rms = computeAudioRms(copy);
+          setMicLevel(Math.min(100, Math.round(rms * 400)));
+        }
       };
 
       // Hubungkan ke gain 0 agar tidak terjadi feedback speaker

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  BookOpen,
   Check,
   Eye,
+  Loader2,
   Mic,
   Play,
   RotateCcw,
@@ -22,12 +24,14 @@ import { useAppContext } from '../../app/AppContext';
 import {
   getAvailableJuzNumbers,
   getSurahMap,
+  pickRandomPromptFromSurahAsync,
   pickRandomPromptWithContinuationAsync,
   type RandomPromptSelection,
 } from '../../data/quran/datasetAdapter';
 import { useAudioRecorder } from '../../lib/audio-recorder/useAudioRecorder';
 import { useLocalAsr } from '../../lib/asr-client/useLocalAsr';
 import { savePracticeSession } from '../../lib/storage/sessionHistory';
+import { loadTestConfig, saveTestConfig } from '../../lib/storage/preferences';
 import { StatusBanner } from '../../components/StatusBanner';
 
 type TestStep = 'setup' | 'reciting' | 'quiz' | 'result';
@@ -45,29 +49,32 @@ export function MemorizationTestPage() {
     [dataset]
   );
 
-  const [juzStart, setJuzStart] = useState<number>(1);
-  const [juzEnd, setJuzEnd] = useState<number>(30);
-  const [targetAyahCount, setTargetAyahCount] = useState<number>(
-    preferences.defaultTargetAyahCount
+  const savedTestConfig = useMemo(() => loadTestConfig(), []);
+  const [scopeMode, setScopeMode] = useState<'juz' | 'surah'>(
+    savedTestConfig.scopeMode ?? 'juz'
   );
-  const [quizConfig, setQuizConfig] = useState<MetadataQuizConfig>({
-    guessSurah: true,
-    guessPage: true,
-    guessAyahNumber: true,
-  });
+  const [selectedSurah, setSelectedSurah] = useState<number>(
+    savedTestConfig.selectedSurah ?? 1
+  );
+  const [juzStart, setJuzStart] = useState<number>(savedTestConfig.juzStart);
+  const [juzEnd, setJuzEnd] = useState<number>(savedTestConfig.juzEnd);
+  const [targetAyahCount, setTargetAyahCount] = useState<number>(
+    savedTestConfig.targetAyahCount
+  );
+  const [quizConfig, setQuizConfig] = useState<MetadataQuizConfig>(
+    savedTestConfig.quizConfig
+  );
 
   useEffect(() => {
     const paramStart = Number(searchParams.get('juzStart'));
     const paramEnd = Number(searchParams.get('juzEnd'));
-    if (availableJuz.length > 0) {
-      setJuzStart(
-        availableJuz.includes(paramStart) ? paramStart : availableJuz[0]!
-      );
-      setJuzEnd(
-        availableJuz.includes(paramEnd)
-          ? paramEnd
-          : availableJuz[availableJuz.length - 1]!
-      );
+    if (paramStart && availableJuz.includes(paramStart)) {
+      setJuzStart(paramStart);
+      saveTestConfig({ juzStart: paramStart });
+    }
+    if (paramEnd && availableJuz.includes(paramEnd)) {
+      setJuzEnd(paramEnd);
+      saveTestConfig({ juzEnd: paramEnd });
     }
   }, [availableJuz, searchParams]);
 
@@ -105,7 +112,7 @@ export function MemorizationTestPage() {
     if (!dataset) return;
     setSetupError(null);
 
-    if (juzStart > juzEnd) {
+    if (scopeMode === 'juz' && juzStart > juzEnd) {
       setSetupError(
         'Juz awal tidak boleh lebih besar daripada Juz akhir.'
       );
@@ -114,16 +121,25 @@ export function MemorizationTestPage() {
 
     setIsStartingTest(true);
     try {
-      const picked = await pickRandomPromptWithContinuationAsync(
-        dataset,
-        juzStart,
-        juzEnd,
-        targetAyahCount
-      );
+      const picked =
+        scopeMode === 'surah'
+          ? await pickRandomPromptFromSurahAsync(
+              dataset,
+              selectedSurah,
+              targetAyahCount
+            )
+          : await pickRandomPromptWithContinuationAsync(
+              dataset,
+              juzStart,
+              juzEnd,
+              targetAyahCount
+            );
 
       if (!picked) {
         setSetupError(
-          'Tidak ditemukan ayat pemantik dengan lanjutan yang valid pada rentang juz tersebut.'
+          scopeMode === 'surah'
+            ? `Tidak ditemukan ayat pemantik dengan lanjutan yang valid pada surah ${surahMap.get(selectedSurah)?.nameLatin ?? selectedSurah}. Coba kurangi target ayat lanjutan.`
+            : 'Tidak ditemukan ayat pemantik dengan lanjutan yang valid pada rentang juz tersebut.'
         );
         return;
       }
@@ -167,51 +183,6 @@ export function MemorizationTestPage() {
     });
   };
 
-  const finishRecitationAndProceed = async () => {
-    if (!selection) return;
-
-    setAsrWarning(null);
-    setIsEvaluating(true);
-
-    try {
-      let evalSummary: RecitationEvaluationSummary;
-
-      if (recorder.recordedAudio) {
-        const res = await asr.evaluateRecordedPcm(
-          recorder.recordedAudio.pcm16k,
-          selection.expectedContinuation,
-          preferences.asrConfidenceThreshold
-        );
-        evalSummary = res.summary;
-        if (res.warning) {
-          setAsrWarning(res.warning);
-        }
-      } else {
-        evalSummary = evaluateRecitation({
-          recognizedTranscript: '',
-          expectedAyahs: selection.expectedContinuation,
-          confidence: 0,
-          confidenceThreshold: preferences.asrConfidenceThreshold,
-        });
-      }
-
-      setEvaluation(evalSummary);
-
-      const anyQuizEnabled =
-        quizConfig.guessSurah ||
-        quizConfig.guessPage ||
-        quizConfig.guessAyahNumber;
-
-      if (anyQuizEnabled) {
-        setStep('quiz');
-      } else {
-        await finalizeAndSave(evalSummary, { skipped: true }, null);
-      }
-    } finally {
-      setIsEvaluating(false);
-    }
-  };
-
   const finalizeAndSave = async (
     evalSummary: RecitationEvaluationSummary,
     answers: MetadataQuizAnswers,
@@ -224,8 +195,10 @@ export function MemorizationTestPage() {
     const session: PracticeSessionLocal = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: new Date().toISOString(),
-      selectedJuzStart: juzStart,
-      selectedJuzEnd: juzEnd,
+      selectedJuzStart:
+        scopeMode === 'juz' ? juzStart : selection.promptAyah.juzNumber,
+      selectedJuzEnd:
+        scopeMode === 'juz' ? juzEnd : selection.promptAyah.juzNumber,
       promptSurah: selection.promptAyah.surahNumber,
       promptAyah: selection.promptAyah.ayahNumber,
       targetAyahCount,
@@ -243,71 +216,146 @@ export function MemorizationTestPage() {
     }
   };
 
-  const handleSubmitQuiz = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selection || !evaluation) return;
+  const handleEvaluateAndSubmit = async () => {
+    if (!selection) return;
 
-    const prompt = selection.promptAyah;
-    const expectedSurah = surahMap.get(prompt.surahNumber);
+    setAsrWarning(null);
+    setIsEvaluating(true);
 
-    const result: MetadataQuizResult = {
-      totalAnswered: 0,
-      totalCorrect: 0,
-    };
+    // Berikan jeda waktu visual minimal agar animasi tombol loading dan pop-up terlihat jelas
+    const minWaitPromise = new Promise((resolve) => setTimeout(resolve, 850));
 
-    const answers: MetadataQuizAnswers = {};
+    try {
+      let evalSummary: RecitationEvaluationSummary;
 
-    if (quizConfig.guessSurah) {
-      const actualSurah = guessSurahInput ? Number(guessSurahInput) : undefined;
-      answers.surahNumber = actualSurah;
-      const isCorrect = actualSurah === prompt.surahNumber;
-      result.totalAnswered++;
-      if (isCorrect) result.totalCorrect++;
-      result.guessSurah = {
-        expected: prompt.surahNumber,
-        expectedLabel: expectedSurah
-          ? `${expectedSurah.surahNumber}. ${expectedSurah.nameLatin}`
-          : `Surah ${prompt.surahNumber}`,
-        actual: actualSurah,
-        actualLabel: actualSurah
-          ? `${actualSurah}. ${surahMap.get(actualSurah)?.nameLatin ?? ''}`
-          : 'Tidak dijawab',
-        isCorrect,
+      if (recorder.recordedAudio) {
+        const [res] = await Promise.all([
+          asr.evaluateRecordedPcm(
+            recorder.recordedAudio.pcm16k,
+            selection.expectedContinuation,
+            preferences.asrConfidenceThreshold
+          ),
+          minWaitPromise,
+        ]);
+        evalSummary = res.summary;
+        if (res.warning) {
+          setAsrWarning(res.warning);
+        }
+      } else {
+        await minWaitPromise;
+        evalSummary = evaluateRecitation({
+          recognizedTranscript: '',
+          expectedAyahs: selection.expectedContinuation,
+          confidence: 0,
+          confidenceThreshold: preferences.asrConfidenceThreshold,
+        });
+      }
+
+      setEvaluation(evalSummary);
+
+      const prompt = selection.promptAyah;
+      const expectedSurah = surahMap.get(prompt.surahNumber);
+
+      const result: MetadataQuizResult = {
+        totalAnswered: 0,
+        totalCorrect: 0,
       };
+
+      const answers: MetadataQuizAnswers = {};
+
+      const anyQuizEnabled =
+        quizConfig.guessSurah ||
+        quizConfig.guessPage ||
+        quizConfig.guessAyahNumber;
+
+      if (quizConfig.guessSurah) {
+        const actualSurah = guessSurahInput ? Number(guessSurahInput) : undefined;
+        answers.surahNumber = actualSurah;
+        const isCorrect = actualSurah === prompt.surahNumber;
+        result.totalAnswered++;
+        if (isCorrect) result.totalCorrect++;
+        result.guessSurah = {
+          expected: prompt.surahNumber,
+          expectedLabel: expectedSurah
+            ? `${expectedSurah.surahNumber}. ${expectedSurah.nameLatin}`
+            : `Surah ${prompt.surahNumber}`,
+          actual: actualSurah,
+          actualLabel: actualSurah
+            ? `${actualSurah}. ${surahMap.get(actualSurah)?.nameLatin ?? ''}`
+            : 'Tidak dijawab',
+          isCorrect,
+        };
+      }
+
+      if (quizConfig.guessPage) {
+        // Halaman yang dicakup oleh ayat pemantik dan seluruh ayat lanjutan
+        const allPages = [
+          prompt.pageNumberMsi,
+          ...selection.expectedContinuation.map((a) => a.pageNumberMsi),
+        ];
+        const minPage = Math.min(...allPages);
+        const maxPage = Math.max(...allPages);
+        const expectedLabel =
+          minPage === maxPage
+            ? `Hal. ${minPage}`
+            : `Hal. ${minPage}–Hal. ${maxPage}`;
+
+        const cleanedInput = guessPageInput.trim();
+        let isCorrect = false;
+        let actualPage: number | undefined;
+
+        if (cleanedInput) {
+          // Cek format range seperti "483-484" atau "483 - 484"
+          const rangeMatch = cleanedInput.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+          if (rangeMatch) {
+            const p1 = Number(rangeMatch[1]);
+            const p2 = Number(rangeMatch[2]);
+            actualPage = p1;
+            isCorrect =
+              (p1 === minPage && p2 === maxPage) ||
+              (p1 >= minPage && p2 <= maxPage);
+          } else {
+            const single = Number(cleanedInput);
+            if (!isNaN(single)) {
+              actualPage = single;
+              isCorrect = single >= minPage && single <= maxPage;
+            }
+          }
+        }
+
+        answers.pageNumberMsi = actualPage;
+        result.totalAnswered++;
+        if (isCorrect) result.totalCorrect++;
+        result.guessPage = {
+          expected: prompt.pageNumberMsi,
+          expectedLabel,
+          actual: actualPage,
+          actualLabel: cleanedInput || 'Tidak dijawab',
+          isCorrect,
+        };
+      }
+
+      if (quizConfig.guessAyahNumber) {
+        const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
+        answers.ayahNumber = actualAyah;
+        const isCorrect = actualAyah === prompt.ayahNumber;
+        result.totalAnswered++;
+        if (isCorrect) result.totalCorrect++;
+        result.guessAyahNumber = {
+          expected: prompt.ayahNumber,
+          actual: actualAyah,
+          isCorrect,
+        };
+      }
+
+      await finalizeAndSave(
+        evalSummary,
+        anyQuizEnabled ? answers : { skipped: true },
+        anyQuizEnabled ? result : null
+      );
+    } finally {
+      setIsEvaluating(false);
     }
-
-    if (quizConfig.guessPage) {
-      const actualPage = guessPageInput ? Number(guessPageInput) : undefined;
-      answers.pageNumberMsi = actualPage;
-      const isCorrect = actualPage === prompt.pageNumberMsi;
-      result.totalAnswered++;
-      if (isCorrect) result.totalCorrect++;
-      result.guessPage = {
-        expected: prompt.pageNumberMsi,
-        actual: actualPage,
-        isCorrect,
-      };
-    }
-
-    if (quizConfig.guessAyahNumber) {
-      const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
-      answers.ayahNumber = actualAyah;
-      const isCorrect = actualAyah === prompt.ayahNumber;
-      result.totalAnswered++;
-      if (isCorrect) result.totalCorrect++;
-      result.guessAyahNumber = {
-        expected: prompt.ayahNumber,
-        actual: actualAyah,
-        isCorrect,
-      };
-    }
-
-    await finalizeAndSave(evaluation, answers, result);
-  };
-
-  const handleSkipQuiz = async () => {
-    if (!evaluation) return;
-    await finalizeAndSave(evaluation, { skipped: true }, null);
   };
 
   if (isLoadingDataset || !dataset) {
@@ -329,7 +377,7 @@ export function MemorizationTestPage() {
             Rekaman suara dan pengenalan bacaan berjalan lokal di browser Anda.
           </p>
         </div>
-        {step !== 'setup' && (
+        {step === 'result' && (
           <button
             type="button"
             onClick={() => setStep('setup')}
@@ -348,48 +396,121 @@ export function MemorizationTestPage() {
             </StatusBanner>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label
-                htmlFor="juz-start"
-                className="block text-xs font-semibold text-[var(--text-secondary)]"
+          <div className="space-y-2">
+            <span className="block text-xs font-semibold text-[var(--text-secondary)]">
+              Cakupan Pemilihan Ayat Pemantik
+            </span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setScopeMode('juz');
+                  saveTestConfig({ scopeMode: 'juz' });
+                }}
+                className={`min-h-[42px] rounded-[10px] border px-4 py-2 text-xs font-semibold transition-colors ${
+                  scopeMode === 'juz'
+                    ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--accent-primary)]'
+                    : 'border-[var(--border-default)] bg-[var(--bg-canvas)] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
+                }`}
               >
-                Dari Juz
-              </label>
-              <select
-                id="juz-start"
-                value={juzStart}
-                onChange={(e) => setJuzStart(Number(e.target.value))}
-                className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium tabular-nums"
+                Rentang Juz (1–30)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScopeMode('surah');
+                  saveTestConfig({ scopeMode: 'surah' });
+                }}
+                className={`min-h-[42px] rounded-[10px] border px-4 py-2 text-xs font-semibold transition-colors ${
+                  scopeMode === 'surah'
+                    ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--accent-primary)]'
+                    : 'border-[var(--border-default)] bg-[var(--bg-canvas)] text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]'
+                }`}
               >
-                {availableJuz.map((j) => (
-                  <option key={j} value={j}>
-                    Juz {j}
-                  </option>
-                ))}
-              </select>
+                Pilih Satu Surah Tertentu
+              </button>
             </div>
+          </div>
 
-            <div>
-              <label
-                htmlFor="juz-end"
-                className="block text-xs font-semibold text-[var(--text-secondary)]"
-              >
-                Sampai Juz
-              </label>
-              <select
-                id="juz-end"
-                value={juzEnd}
-                onChange={(e) => setJuzEnd(Number(e.target.value))}
-                className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium tabular-nums"
-              >
-                {availableJuz.map((j) => (
-                  <option key={j} value={j}>
-                    Juz {j}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {scopeMode === 'juz' ? (
+              <>
+                <div>
+                  <label
+                    htmlFor="juz-start"
+                    className="block text-xs font-semibold text-[var(--text-secondary)]"
+                  >
+                    Dari Juz
+                  </label>
+                  <select
+                    id="juz-start"
+                    value={juzStart}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setJuzStart(val);
+                      saveTestConfig({ juzStart: val });
+                    }}
+                    className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium tabular-nums"
+                  >
+                    {availableJuz.map((j) => (
+                      <option key={j} value={j}>
+                        Juz {j}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="juz-end"
+                    className="block text-xs font-semibold text-[var(--text-secondary)]"
+                  >
+                    Sampai Juz
+                  </label>
+                  <select
+                    id="juz-end"
+                    value={juzEnd}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setJuzEnd(val);
+                      saveTestConfig({ juzEnd: val });
+                    }}
+                    className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium tabular-nums"
+                  >
+                    {availableJuz.map((j) => (
+                      <option key={j} value={j}>
+                        Juz {j}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="test-surah-select"
+                  className="block text-xs font-semibold text-[var(--text-secondary)]"
+                >
+                  Pilih Surah
+                </label>
+                <select
+                  id="test-surah-select"
+                  value={selectedSurah}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setSelectedSurah(val);
+                    saveTestConfig({ selectedSurah: val });
+                  }}
+                  className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium"
+                >
+                  {dataset.surahs.map((s) => (
+                    <option key={s.surahNumber} value={s.surahNumber}>
+                      {s.surahNumber}. {s.nameLatin} ({s.totalAyahs} ayat)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label
@@ -401,7 +522,11 @@ export function MemorizationTestPage() {
               <select
                 id="target-ayah-count"
                 value={targetAyahCount}
-                onChange={(e) => setTargetAyahCount(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setTargetAyahCount(val);
+                  saveTestConfig({ targetAyahCount: val });
+                }}
                 className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm font-medium tabular-nums"
               >
                 {[1, 2, 3, 4, 5].map((count) => (
@@ -422,12 +547,14 @@ export function MemorizationTestPage() {
                 <input
                   type="checkbox"
                   checked={quizConfig.guessSurah}
-                  onChange={(e) =>
-                    setQuizConfig((prev) => ({
-                      ...prev,
-                      guessSurah: e.target.checked,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setQuizConfig((prev) => {
+                      const next = { ...prev, guessSurah: checked };
+                      saveTestConfig({ quizConfig: next });
+                      return next;
+                    });
+                  }}
                   className="h-4 w-4 accent-[var(--accent-primary)]"
                 />
                 <span>Tebak nama surah</span>
@@ -437,12 +564,14 @@ export function MemorizationTestPage() {
                 <input
                   type="checkbox"
                   checked={quizConfig.guessPage}
-                  onChange={(e) =>
-                    setQuizConfig((prev) => ({
-                      ...prev,
-                      guessPage: e.target.checked,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setQuizConfig((prev) => {
+                      const next = { ...prev, guessPage: checked };
+                      saveTestConfig({ quizConfig: next });
+                      return next;
+                    });
+                  }}
                   className="h-4 w-4 accent-[var(--accent-primary)]"
                 />
                 <span>Tebak halaman</span>
@@ -452,12 +581,14 @@ export function MemorizationTestPage() {
                 <input
                   type="checkbox"
                   checked={quizConfig.guessAyahNumber}
-                  onChange={(e) =>
-                    setQuizConfig((prev) => ({
-                      ...prev,
-                      guessAyahNumber: e.target.checked,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setQuizConfig((prev) => {
+                      const next = { ...prev, guessAyahNumber: checked };
+                      saveTestConfig({ quizConfig: next });
+                      return next;
+                    });
+                  }}
                   className="h-4 w-4 accent-[var(--accent-primary)]"
                 />
                 <span>Tebak nomor ayat</span>
@@ -490,8 +621,10 @@ export function MemorizationTestPage() {
                 1. Dengarkan Ayat Pemantik
               </h2>
               <span className="tabular-nums rounded-[6px] bg-[var(--bg-subtle)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
-                Cakupan Juz {juzStart}–{juzEnd} • Target{' '}
-                {selection.expectedContinuation.length} ayat lanjutan
+                {scopeMode === 'surah'
+                  ? `Surah ${surahMap.get(selectedSurah)?.nameLatin ?? selectedSurah}`
+                  : `Cakupan Juz ${juzStart}–${juzEnd}`}{' '}
+                • Target {selection.expectedContinuation.length} ayat lanjutan
               </span>
             </div>
 
@@ -644,120 +777,131 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            {/* Bagian 3: Tebak Surah & Metadata Ayat Pemantik (Tepat di bawah voice) */}
+            {(quizConfig.guessSurah ||
+              quizConfig.guessPage ||
+              quizConfig.guessAyahNumber) && (
+              <div className="border-t border-[var(--border-default)] pt-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                    3. Tebak Surah &amp; Metadata Ayat Pemantik
+                  </h3>
+                  <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                    Tebak metadata ayat pemantik yang baru saja Anda dengar sebelum evaluasi dinilai.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {quizConfig.guessSurah && (
+                    <div className={quizConfig.guessPage || quizConfig.guessAyahNumber ? '' : 'sm:col-span-3'}>
+                      <label
+                        htmlFor="quiz-surah"
+                        className="block text-xs font-semibold text-[var(--text-secondary)]"
+                      >
+                        Nama Surah (ayat pemantik)
+                      </label>
+                      <select
+                        id="quiz-surah"
+                        value={guessSurahInput}
+                        onChange={(e) => setGuessSurahInput(e.target.value)}
+                        className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm font-medium"
+                      >
+                        <option value="">-- Pilih Surah --</option>
+                        {dataset.surahs.map((s) => (
+                          <option key={s.surahNumber} value={s.surahNumber}>
+                            {s.surahNumber}. {s.nameLatin}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {quizConfig.guessPage && (
+                    <div>
+                      <label
+                        htmlFor="quiz-page"
+                        className="block text-xs font-semibold text-[var(--text-secondary)]"
+                      >
+                        Nomor Halaman Mushaf (1–604)
+                      </label>
+                      <input
+                        id="quiz-page"
+                        type="text"
+                        value={guessPageInput}
+                        onChange={(e) => setGuessPageInput(e.target.value)}
+                        placeholder="Contoh: 483 atau 483-484"
+                        className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
+                      />
+                    </div>
+                  )}
+
+                  {quizConfig.guessAyahNumber && (
+                    <div>
+                      <label
+                        htmlFor="quiz-ayah"
+                        className="block text-xs font-semibold text-[var(--text-secondary)]"
+                      >
+                        Nomor Ayat Pemantik
+                      </label>
+                      <input
+                        id="quiz-ayah"
+                        type="number"
+                        min={1}
+                        max={286}
+                        value={guessAyahInput}
+                        onChange={(e) => setGuessAyahInput(e.target.value)}
+                        placeholder="Contoh: 1"
+                        className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Indikator Loading Saat Mengevaluasi Jawaban */}
+            {isEvaluating && (
+              <div className="rounded-[12px] border border-[var(--accent-primary)]/40 bg-[var(--accent-soft)] p-4 sm:p-5 text-center space-y-2.5 animate-pulse">
+                <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent-primary)] text-white">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-[var(--accent-primary)]">
+                    Sedang Mengevaluasi Jawaban &amp; Rekaman Suara...
+                  </h4>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                    Model AI lokal (Tilawa ONNX) sedang mencocokkan kata demi kata bacaan Anda secara privat langsung di browser tanpa mengirim data ke server.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tombol Aksi Bawah */}
+            <div className="flex justify-end border-t border-[var(--border-default)] pt-4">
               <button
                 type="button"
-                disabled={isEvaluating || !recorder.recordedAudio}
-                onClick={finishRecitationAndProceed}
-                className="inline-flex min-h-[46px] items-center gap-2 rounded-[10px] bg-[var(--accent-primary)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--accent-hover)] disabled:opacity-40"
+                disabled={isEvaluating || recorder.status === 'recording'}
+                onClick={handleEvaluateAndSubmit}
+                className={`w-full sm:w-auto inline-flex min-h-[46px] items-center justify-center gap-2.5 rounded-[10px] bg-[var(--accent-primary)] px-6 py-2.5 text-sm font-semibold text-white transition-all ${
+                  isEvaluating
+                    ? 'cursor-wait opacity-85 ring-4 ring-[var(--accent-soft)]'
+                    : 'hover:bg-[var(--accent-hover)]'
+                } disabled:opacity-50`}
               >
-                <Check className="h-4 w-4" aria-hidden="true" />
-                <span>
-                  {isEvaluating
-                    ? 'Memproses Evaluasi...'
-                    : 'Lanjut ke Evaluasi'}
-                </span>
+                {isEvaluating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
+                    <span>Mengevaluasi Jawaban...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                    <span>Kirim Jawaban &amp; Evaluasi</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
-        </section>
-      )}
-
-      {step === 'quiz' && selection && (
-        <section className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-5">
-          <div>
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">
-              Kuis Metadata Ayat Pemantik
-            </h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">
-              Jawab berdasarkan ayat pemantik yang diperdengarkan sebelum
-              membuka kunci jawaban.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmitQuiz} className="space-y-4">
-            {quizConfig.guessSurah && (
-              <div>
-                <label
-                  htmlFor="quiz-surah"
-                  className="block text-xs font-semibold text-[var(--text-secondary)]"
-                >
-                  Nama Surah (ayat pemantik)
-                </label>
-                <select
-                  id="quiz-surah"
-                  value={guessSurahInput}
-                  onChange={(e) => setGuessSurahInput(e.target.value)}
-                  className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm"
-                >
-                  <option value="">-- Pilih Surah --</option>
-                  {dataset.surahs.map((s) => (
-                    <option key={s.surahNumber} value={s.surahNumber}>
-                      {s.surahNumber}. {s.nameLatin}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {quizConfig.guessPage && (
-              <div>
-                <label
-                  htmlFor="quiz-page"
-                  className="block text-xs font-semibold text-[var(--text-secondary)]"
-                >
-                  Nomor Halaman Mushaf MSI (1–604)
-                </label>
-                <input
-                  id="quiz-page"
-                  type="number"
-                  min={1}
-                  max={604}
-                  value={guessPageInput}
-                  onChange={(e) => setGuessPageInput(e.target.value)}
-                  placeholder="Contoh: 604"
-                  className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm tabular-nums"
-                />
-              </div>
-            )}
-
-            {quizConfig.guessAyahNumber && (
-              <div>
-                <label
-                  htmlFor="quiz-ayah"
-                  className="block text-xs font-semibold text-[var(--text-secondary)]"
-                >
-                  Nomor Ayat Pemantik
-                </label>
-                <input
-                  id="quiz-ayah"
-                  type="number"
-                  min={1}
-                  max={286}
-                  value={guessAyahInput}
-                  onChange={(e) => setGuessAyahInput(e.target.value)}
-                  placeholder="Contoh: 1"
-                  className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2.5 text-sm tabular-nums"
-                />
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleSkipQuiz}
-                className="min-h-[44px] rounded-[10px] border border-[var(--border-default)] px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-subtle)]"
-              >
-                Lewati Kuis
-              </button>
-              <button
-                type="submit"
-                className="min-h-[44px] rounded-[10px] bg-[var(--accent-primary)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--accent-hover)]"
-              >
-                Kirim Jawaban &amp; Lihat Hasil
-              </button>
-            </div>
-          </form>
         </section>
       )}
 
@@ -925,8 +1069,8 @@ export function MemorizationTestPage() {
                       }
                     >
                       {metadataResult.guessPage.isCorrect
-                        ? `Benar (Hal. ${metadataResult.guessPage.expected})`
-                        : `Jawaban Anda: ${metadataResult.guessPage.actual ?? '-'} — Seharusnya: Hal. ${metadataResult.guessPage.expected}`}
+                        ? `Benar (${metadataResult.guessPage.expectedLabel ?? `Hal. ${metadataResult.guessPage.expected}`})`
+                        : `Jawaban Anda: ${metadataResult.guessPage.actualLabel ?? metadataResult.guessPage.actual ?? '-'} — Seharusnya: ${metadataResult.guessPage.expectedLabel ?? `Hal. ${metadataResult.guessPage.expected}`}`}
                     </span>
                   </li>
                 )}
@@ -972,15 +1116,50 @@ export function MemorizationTestPage() {
               <span>Ulangi Ayat Ini</span>
             </button>
 
-            <Link
-              to={`/baca?mode=ayah&surah=${selection.promptAyah.surahNumber}&ayah=${selection.promptAyah.ayahNumber}&page=${selection.promptAyah.pageNumberMsi}`}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
-            >
-              <VolumeX className="hidden" aria-hidden="true" />
-              <span>Lihat Ayat di Pembaca</span>
-            </Link>
+            {(() => {
+              const preferredMode = preferences.defaultReaderMode ?? 'page';
+              const targetUrl =
+                preferredMode === 'page'
+                  ? `/baca?mode=page&page=${selection.promptAyah.pageNumberMsi}`
+                  : `/baca?mode=ayah&surah=${selection.promptAyah.surahNumber}&ayah=${selection.promptAyah.ayahNumber}`;
+              return (
+                <Link
+                  to={targetUrl}
+                  className="inline-flex min-h-[44px] items-center gap-2 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-subtle)]"
+                >
+                  <BookOpen className="h-4 w-4" aria-hidden="true" />
+                  <span>Lihat di Qur’an</span>
+                </Link>
+              );
+            })()}
           </div>
         </section>
+      )}
+
+      {/* Pop-up Modal Loading Saat Mengirim Jawaban & Evaluasi */}
+      {isEvaluating && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        >
+          <div className="w-full max-w-sm rounded-[16px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 shadow-2xl text-center space-y-4">
+            <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-primary)] ring-8 ring-[var(--accent-soft)]/50">
+              <Loader2 className="h-7 w-7 animate-spin" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-base font-bold text-[var(--text-primary)]">
+                Mengevaluasi Hafalan &amp; Jawaban...
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Model AI lokal (Tilawa ONNX) sedang mencocokkan bacaan suara dan memeriksa tebakan Anda secara langsung di perangkat.
+              </p>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--bg-subtle)]">
+              <div className="h-full w-2/3 bg-[var(--accent-primary)] animate-pulse rounded-full" />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -237,3 +237,17 @@ export async function pickRandomPromptWithContinuationAsync(
     preferredGlobal
   );
 }
+
+/**
+ * Memilih ayat pemantik acak dari satu surah tertentu.
+ */
+export async function pickRandomPromptFromSurahAsync(
+  dataset: QuranDataset,
+  surahNumber: number,
+  requestedContinuationCount: number
+): Promise<RandomPromptSelection | null> {
+  const ayahs = await getSurahAyahsData(dataset, surahNumber);
+  if (ayahs.length === 0) return null;
+  const sorted = [...ayahs].sort((a, b) => a.ayahNumber - b.ayahNumber);
+  return buildSelectionFromScopedList(sorted, requestedContinuationCount);
+}

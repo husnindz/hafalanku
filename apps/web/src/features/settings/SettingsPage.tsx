@@ -88,6 +88,35 @@ export function SettingsPage() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border-default)] pt-4">
+          <div>
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              Mode Gelap (Malam)
+            </span>
+            <p className="text-xs text-[var(--text-muted)]">
+              Tampilan latar gelap yang lebih nyaman untuk membaca dan murojaah.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preferences.darkMode}
+            onClick={() =>
+              updatePreferences({ darkMode: !preferences.darkMode })
+            }
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              preferences.darkMode ? 'bg-[var(--accent-primary)]' : 'bg-[var(--border-strong)]'
+            }`}
+          >
+            <span className="sr-only">Aktifkan mode gelap</span>
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                preferences.darkMode ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[var(--border-default)] pt-4">
           <p className="text-sm font-semibold text-[var(--text-primary)]">
             Cache
           </p>

@@ -13,7 +13,7 @@ import { StatusBanner } from './StatusBanner';
 const NAV_ITEMS = [
   { to: '/', label: 'Beranda', icon: Home },
   { to: '/tes', label: 'Tes Hafalan', icon: Mic },
-  { to: '/baca', label: 'Baca', icon: BookOpen },
+  { to: '/baca', label: 'Al-Qur’an', icon: BookOpen },
   { to: '/riwayat', label: 'Riwayat', icon: History },
   { to: '/pengaturan', label: 'Pengaturan', icon: Settings },
 ];
@@ -23,7 +23,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-dvh flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-surface)]/95 backdrop-blur-xs">
+      <header className="sticky top-0 z-20 border-b border-[var(--border-default)] bg-[var(--bg-surface)]">
         <div className="mx-auto flex h-16 max-w-[960px] items-center justify-between px-4 sm:px-6">
           <NavLink
             to="/"
