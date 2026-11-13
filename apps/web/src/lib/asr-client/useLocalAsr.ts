@@ -15,7 +15,7 @@ type TilawaInstance = Awaited<
 >;
 
 const TILAWA_DISCLAIMER =
-  'Hasil ini adalah estimasi pencocokan suara lokal (Tilawa ONNX di browser), bukan penilaian tajwid, makhraj, atau pengganti tashih guru.';
+  'Hasil evaluasi ini adalah perkiraan pencocokan pengenalan suara (ASR lokal) untuk membantu murojaah mandiri, bukan penilaian tajwid, makhraj, ataupun pengganti tashih guru Al-Qur’an.';
 
 function compareWordRef(
   a: { surah: number; ayah: number; word: number },
@@ -394,7 +394,7 @@ export function useLocalAsr() {
               confidence: maxConfidence,
               confidenceThreshold,
               recognizedTranscript:
-                'Bacaan tidak sesuai dengan target kelanjutan ayat.',
+                'Bacaan terdeteksi belum sesuai dengan kelanjutan ayat target.',
               normalizedTranscript: '',
               expectedAyahs: expectedSummary,
               wordAlignments: expectedAyahs.flatMap((ayah) =>

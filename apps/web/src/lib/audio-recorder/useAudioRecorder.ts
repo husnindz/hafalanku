@@ -226,22 +226,22 @@ export function useAudioRecorder() {
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
         setStatus('mic-denied');
         setErrorMessage(
-          'Izin mikrofon ditolak. Aktifkan izin mikrofon pada ikon gembok/pengaturan situs browser Anda, lalu coba lagi.'
+          'Izin mikrofon belum diberikan. Aktifkan izin mikrofon pada pengaturan browser.'
         );
       } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
         setStatus('error');
         setErrorMessage(
-          'Perangkat mikrofon tidak ditemukan. Pastikan mikrofon atau headset terpasang.'
+          'Perangkat mikrofon tidak ditemukan. Pastikan mikrofon atau headset terpasang dan coba kembali.'
         );
       } else if (name === 'NotReadableError' || name === 'TrackStartError') {
         setStatus('error');
         setErrorMessage(
-          'Mikrofon sedang dipakai aplikasi lain atau tidak dapat dibaca oleh browser.'
+          'Mikrofon sedang dipakai aplikasi lain atau tidak dapat dibaca oleh browser. Tutup aplikasi lain lalu coba kembali.'
         );
       } else {
         setStatus('error');
         setErrorMessage(
-          `Tidak dapat memulai rekaman mikrofon (${name || 'kesalahan perangkat'}).`
+          'Suara belum berhasil direkam. Periksa mikrofon dan coba kembali.'
         );
       }
     }
@@ -259,7 +259,7 @@ export function useAudioRecorder() {
     if (totalSamples === 0) {
       setStatus('error');
       setErrorMessage(
-        'Tidak ada data audio yang masuk dari mikrofon. Periksa mikrofon Anda lalu coba rekam ulang.'
+        'Suara belum berhasil direkam. Periksa mikrofon dan coba kembali.'
       );
       return;
     }

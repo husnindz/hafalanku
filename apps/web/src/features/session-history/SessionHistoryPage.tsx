@@ -19,6 +19,21 @@ import { useAppContext } from '../../app/AppContext';
 import { getSurahMap } from '../../data/quran/datasetAdapter';
 import { StatusBanner } from '../../components/StatusBanner';
 
+function formatEvaluationStatus(status?: string): string {
+  switch (status) {
+    case 'matched':
+      return 'Cocok';
+    case 'partial':
+      return 'Cocok sebagian';
+    case 'unratable':
+      return 'Belum dapat dinilai';
+    case 'mismatch':
+      return 'Tidak sesuai';
+    default:
+      return status ?? '-';
+  }
+}
+
 export function SessionHistoryPage() {
   const { dataset } = useAppContext();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -158,19 +173,19 @@ export function SessionHistoryPage() {
                   >
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-[var(--text-primary)]">
-                        Pemantik:{' '}
+                        Ayat Pemantik:{' '}
                         {surah
                           ? surah.nameLatin
                           : `Surah ${session.promptSurah}`}{' '}
                         ({session.promptSurah}:{session.promptAyah})
                       </p>
                       <p className="text-xs text-[var(--text-muted)] tabular-nums">
-                        Juz {session.selectedJuzStart}–{session.selectedJuzEnd}{' '}
-                        • {new Date(session.createdAt).toLocaleString('id-ID')}
+                        Juz {session.selectedJuzStart}–{session.selectedJuzEnd} • Target {session.targetAyahCount} ayat lanjutan •{' '}
+                        {new Date(session.createdAt).toLocaleString('id-ID')}
                         {session.evaluationSummary &&
-                          ` • Status bacaan: ${session.evaluationSummary.status}`}
+                          ` • Evaluasi bacaan: ${formatEvaluationStatus(session.evaluationSummary.status)}`}
                         {session.metadataResult &&
-                          ` • Kuis: ${session.metadataResult.totalCorrect}/${session.metadataResult.totalAnswered}`}
+                          ` • Kuis metadata: ${session.metadataResult.totalCorrect}/${session.metadataResult.totalAnswered}`}
                       </p>
                     </div>
 

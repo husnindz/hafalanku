@@ -59,8 +59,8 @@ export function HomePage() {
           Uji sambung ayat dan murojaah dengan tenang
         </h1>
         <p className="mt-3 max-w-[65ch] text-sm leading-relaxed text-[var(--text-secondary)] sm:text-base">
-          Pilih cakupan juz, dengarkan ayat pemantik, lanjutkan bacaan melalui
-          mikrofon yang diproses secara lokal di browser Anda, lalu periksa
+          Pilih cakupan juz atau surah, dengarkan ayat pemantik, sambung bacaan secara lisan melalui
+          mikrofon yang diproses lokal di browser Anda, lalu periksa
           kecocokan urutan ayat dan metadata Mushaf Standar Indonesia (MSI).
         </p>
 

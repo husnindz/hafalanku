@@ -300,45 +300,22 @@ export function MemorizationTestPage() {
         }
 
         if (quizConfig.guessPage) {
-          // Halaman ayat lanjutan yang dibaca (soal pemantik tidak dihitung)
-          const continuationPages =
-            selection.expectedContinuation.length > 0
-              ? selection.expectedContinuation.map((a) => a.pageNumberMsi)
-              : [prompt.pageNumberMsi];
-          const minPage = Math.min(...continuationPages);
-          const maxPage = Math.max(...continuationPages);
-          const expectedLabel =
-            minPage === maxPage
-              ? `Hal. ${minPage}`
-              : `Hal. ${minPage}–Hal. ${maxPage}`;
+          // Halaman mushaf di mana ayat pertama setelah ayat pemantik dimulai
+          const expectedPage = firstContinuation.pageNumberMsi;
+          const expectedLabel = `Hal. ${expectedPage}`;
 
           const cleanedInput = guessPageInput.trim();
-          let isCorrect = false;
-          let actualPage: number | undefined;
-
-          if (cleanedInput) {
-            const rangeMatch = cleanedInput.match(/^(\d+)\s*[-–]\s*(\d+)$/);
-            if (rangeMatch) {
-              const p1 = Number(rangeMatch[1]);
-              const p2 = Number(rangeMatch[2]);
-              actualPage = p1;
-              isCorrect =
-                (p1 === minPage && p2 === maxPage) ||
-                (p1 >= minPage && p2 <= maxPage);
-            } else {
-              const single = Number(cleanedInput);
-              if (!isNaN(single)) {
-                actualPage = single;
-                isCorrect = single >= minPage && single <= maxPage;
-              }
-            }
-          }
+          const parsedPage = cleanedInput ? Number(cleanedInput) : undefined;
+          const actualPage =
+            parsedPage !== undefined && !isNaN(parsedPage) ? parsedPage : undefined;
+          const isCorrect =
+            actualPage !== undefined && actualPage === expectedPage;
 
           answers.pageNumberMsi = actualPage;
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessPage = {
-            expected: minPage,
+            expected: expectedPage,
             expectedLabel,
             actual: actualPage,
             actualLabel: cleanedInput || 'Tidak dijawab',
@@ -347,15 +324,12 @@ export function MemorizationTestPage() {
         }
 
         if (quizConfig.guessAyahNumber) {
+          // Nomor ayat pertama yang dibaca setelah ayat pemantik (harus tepat cocok)
           const firstContinuationAyah = firstContinuation.ayahNumber;
-          const lastContinuationAyah = lastContinuation.ayahNumber;
           const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
           answers.ayahNumber = actualAyah;
           const isCorrect =
-            actualAyah !== undefined &&
-            (actualAyah === firstContinuationAyah ||
-              (actualAyah >= firstContinuationAyah &&
-                actualAyah <= lastContinuationAyah));
+            actualAyah !== undefined && actualAyah === firstContinuationAyah;
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessAyahNumber = {
@@ -365,17 +339,13 @@ export function MemorizationTestPage() {
           };
         }
       } else {
-        // scopeMode === 'surah': Hanya tebak nomor ayat lanjutan yang dibaca
+        // scopeMode === 'surah': Tebak nomor ayat pertama yang dibaca setelah pemantik
         if (quizConfig.guessAyahNumber) {
           const firstContinuationAyah = firstContinuation.ayahNumber;
-          const lastContinuationAyah = lastContinuation.ayahNumber;
           const actualAyah = guessAyahInput ? Number(guessAyahInput) : undefined;
           answers.ayahNumber = actualAyah;
           const isCorrect =
-            actualAyah !== undefined &&
-            (actualAyah === firstContinuationAyah ||
-              (actualAyah >= firstContinuationAyah &&
-                actualAyah <= lastContinuationAyah));
+            actualAyah !== undefined && actualAyah === firstContinuationAyah;
           result.totalAnswered++;
           if (isCorrect) result.totalCorrect++;
           result.guessAyahNumber = {
@@ -417,7 +387,7 @@ export function MemorizationTestPage() {
             Tes Hafalan Sambung Ayat
           </h1>
           <p className="text-xs text-[var(--text-muted)]">
-            Rekaman suara dan pengenalan bacaan berjalan lokal di browser Anda.
+            Dengarkan ayat pemantik, sambung bacaan secara lisan, dan evaluasi hasil secara lokal di browser Anda.
           </p>
         </div>
         {step === 'result' && (
@@ -487,6 +457,11 @@ export function MemorizationTestPage() {
                 Pilih Satu Surah Tertentu
               </button>
             </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              {scopeMode === 'juz'
+                ? `Ayat pemantik akan dipilih secara acak dari rentang Juz ${juzStart} sampai Juz ${juzEnd}.`
+                : `Ayat pemantik akan dipilih secara acak dari Surah ${surahMap.get(selectedSurah)?.nameLatin ?? selectedSurah}. Kelanjutan ayat dibatasi dalam surah yang sama.`}
+            </p>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -574,7 +549,7 @@ export function MemorizationTestPage() {
                 htmlFor="target-ayah-count"
                 className="block text-xs font-semibold text-[var(--text-secondary)]"
               >
-                Target Ayat Lanjutan
+                Jumlah Ayat Lanjutan
               </label>
               <select
                 id="target-ayah-count"
@@ -592,15 +567,21 @@ export function MemorizationTestPage() {
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                Jumlah ayat lanjutan setelah pemantik (soal pemantik tidak dihitung).
+              </p>
             </div>
           </div>
 
-          <fieldset className="space-y-3 border-t border-[var(--border-default)] pt-5">
+          <fieldset className="space-y-2 border-t border-[var(--border-default)] pt-5">
             <legend className="text-sm font-semibold text-[var(--text-primary)]">
-              Kuis tambahan
+              Kuis Metadata Tambahan (Opsional)
             </legend>
+            <p className="text-xs text-[var(--text-muted)]">
+              Pertanyaan opsional seputar identitas ayat lanjutan pertama. Kuis ini terpisah dan tidak memengaruhi penilaian suara ASR.
+            </p>
             {scopeMode === 'juz' ? (
-              <div className="grid gap-2.5 sm:grid-cols-3">
+              <div className="grid gap-2.5 pt-1 sm:grid-cols-3">
                 <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3.5 py-2 text-sm">
                   <input
                     type="checkbox"
@@ -632,7 +613,7 @@ export function MemorizationTestPage() {
                     }}
                     className="h-4 w-4 accent-[var(--accent-primary)]"
                   />
-                  <span>Tebak halaman</span>
+                  <span>Tebak nomor halaman</span>
                 </label>
 
                 <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3.5 py-2 text-sm">
@@ -649,11 +630,11 @@ export function MemorizationTestPage() {
                     }}
                     className="h-4 w-4 accent-[var(--accent-primary)]"
                   />
-                  <span>Tebak nomor ayat</span>
+                  <span>Tebak nomor ayat pertama</span>
                 </label>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 pt-1">
                 <label className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3.5 py-2 text-sm w-full sm:w-auto">
                   <input
                     type="checkbox"
@@ -668,7 +649,7 @@ export function MemorizationTestPage() {
                     }}
                     className="h-4 w-4 accent-[var(--accent-primary)]"
                   />
-                  <span>Tebak nomor ayat</span>
+                  <span>Tebak nomor ayat pertama</span>
                 </label>
               </div>
             )}
@@ -763,12 +744,12 @@ export function MemorizationTestPage() {
           <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-bold text-[var(--text-primary)]">
-                2. Rekam Bacaan Lanjutan
+                2. Rekam Bacaan Ayat Lanjutan
               </h2>
               <span className="text-xs font-medium text-[var(--text-secondary)]">
                 Status:{' '}
                 <strong>
-                  {recorder.status === 'idle' && 'Siap merekam'}
+                  {recorder.status === 'idle' && (recorder.recordedAudio ? 'Rekaman siap' : 'Siap merekam')}
                   {recorder.status === 'recording' &&
                     `Merekam (${recorder.elapsedSec} dtk)`}
                   {recorder.status === 'processing' && 'Memproses audio lokal...'}
@@ -776,10 +757,20 @@ export function MemorizationTestPage() {
                   {recorder.status === 'mic-denied' && 'Izin mikrofon ditolak'}
                   {recorder.status === 'unsupported-browser' &&
                     'Browser tidak didukung'}
-                  {recorder.status === 'error' && 'Terjadi kesalahan'}
+                  {recorder.status === 'error' && 'Terjadi kendala'}
                 </strong>
               </span>
             </div>
+
+            <p className="text-xs text-[var(--text-muted)]">
+              {recorder.status === 'idle' && !recorder.recordedAudio && 'Mulai membaca ayat lanjutan setelah ayat pemantik.'}
+              {recorder.status === 'recording' && 'Sedang merekam. Bacalah ayat lanjutan dengan jelas.'}
+              {recorder.status === 'processing' && 'Memproses rekaman audio lokal di browser...'}
+              {recorder.status === 'ready' && 'Rekaman selesai. Dengarkan kembali sebelum mengirim jawaban.'}
+              {recorder.status === 'mic-denied' && 'Izin mikrofon belum diberikan. Aktifkan izin mikrofon pada pengaturan browser.'}
+              {recorder.status === 'unsupported-browser' && 'Browser belum mendukung perekaman mikrofon.'}
+              {recorder.status === 'error' && (recorder.errorMessage ?? 'Suara belum berhasil direkam. Periksa mikrofon dan coba kembali.')}
+            </p>
 
             {recorder.errorMessage && (
               <StatusBanner tone="error" title="Kendala Mikrofon">
@@ -852,7 +843,7 @@ export function MemorizationTestPage() {
               </div>
             )}
 
-            {/* Bagian 3: Tebak Metadata Ayat Lanjutan (Jawaban Anda) */}
+            {/* Bagian 3: Kuis Metadata Ayat Lanjutan Pertama (Jawaban Anda) */}
             {scopeMode === 'juz' ? (
               (quizConfig.guessSurah ||
                 quizConfig.guessPage ||
@@ -860,10 +851,10 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-4">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Tebak Metadata Ayat Lanjutan
+                      3. Kuis Metadata Ayat Lanjutan Pertama (Opsional)
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      Tebak metadata ayat lanjutan yang Anda baca sebelum evaluasi dinilai (ayat pemantik tidak dihitung).
+                      Jawab identitas ayat pertama yang Anda baca setelah ayat pemantik. Nomor ayat pemantik tidak dihitung.
                     </p>
                   </div>
 
@@ -882,6 +873,9 @@ export function MemorizationTestPage() {
                         >
                           Nama Surah
                         </label>
+                        <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                          Pada surah apa ayat pertama setelah ayat pemantik berada?
+                        </p>
                         <select
                           id="quiz-surah"
                           value={guessSurahInput}
@@ -904,14 +898,19 @@ export function MemorizationTestPage() {
                           htmlFor="quiz-page"
                           className="block text-xs font-semibold text-[var(--text-secondary)]"
                         >
-                          Halaman Mushaf (1–604)
+                          Nomor Halaman Mushaf (1–604)
                         </label>
+                        <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                          Pada halaman berapa ayat pertama setelah pemantik dimulai?
+                        </p>
                         <input
                           id="quiz-page"
-                          type="text"
+                          type="number"
+                          min={1}
+                          max={604}
                           value={guessPageInput}
                           onChange={(e) => setGuessPageInput(e.target.value)}
-                          placeholder="Contoh: 347 atau 347-348"
+                          placeholder="Contoh: 347"
                           className="mt-1.5 w-full rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] px-3 py-2 text-sm tabular-nums"
                         />
                       </div>
@@ -923,8 +922,11 @@ export function MemorizationTestPage() {
                           htmlFor="quiz-ayah"
                           className="block text-xs font-semibold text-[var(--text-secondary)]"
                         >
-                          Nomor Ayat Lanjutan
+                          Nomor Ayat Pertama yang Dibaca
                         </label>
+                        <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                          Masukkan nomor ayat pertama setelah ayat pemantik.
+                        </p>
                         <input
                           id="quiz-ayah"
                           type="number"
@@ -945,10 +947,10 @@ export function MemorizationTestPage() {
                 <div className="border-t border-[var(--border-default)] pt-5 space-y-3">
                   <div>
                     <h3 className="text-sm font-bold text-[var(--text-primary)]">
-                      3. Tebak Nomor Ayat Lanjutan
+                      3. Tebak Nomor Ayat Pertama (Opsional)
                     </h3>
                     <p className="mt-0.5 text-xs text-[var(--text-muted)]">
-                      Tebak nomor ayat lanjutan yang Anda baca sebelum evaluasi dinilai (ayat pemantik tidak dihitung).
+                      Masukkan nomor ayat pertama yang Anda baca setelah ayat pemantik. Nomor ayat pemantik tidak dihitung.
                     </p>
                   </div>
 
@@ -957,7 +959,7 @@ export function MemorizationTestPage() {
                       htmlFor="quiz-ayah"
                       className="block text-xs font-semibold text-[var(--text-secondary)]"
                     >
-                      Nomor Ayat Lanjutan
+                      Nomor Ayat Pertama yang Dibaca
                     </label>
                     <input
                       id="quiz-ayah"
@@ -1015,8 +1017,8 @@ export function MemorizationTestPage() {
                 {evaluation.status === 'matched' && 'Cocok dengan target'}
                 {evaluation.status === 'partial' && 'Cocok sebagian'}
                 {evaluation.status === 'unratable' &&
-                  'Tidak dapat dinilai / Coba ulang'}
-                {evaluation.status === 'mismatch' && 'Jawaban Salah / Tidak Sesuai'}
+                  'Belum dapat dinilai / Coba ulang'}
+                {evaluation.status === 'mismatch' && 'Tidak sesuai target'}
               </span>
             </div>
 
@@ -1030,42 +1032,75 @@ export function MemorizationTestPage() {
             )}
 
             <div className="space-y-3">
-              <p className="text-xs text-[var(--text-secondary)] tabular-nums">
-                Kata cocok: {evaluation.matchedWordCount} /{' '}
-                {evaluation.expectedWordCount} • Terlewat:{' '}
-                {evaluation.missedCount} • Berbeda:{' '}
-                {evaluation.substitutedCount} • Tambahan:{' '}
-                {evaluation.extraCount}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)] tabular-nums">
+                <span>Kata cocok: <strong>{evaluation.matchedWordCount}</strong> / {evaluation.expectedWordCount}</span>
+                <span>• Terlewat: <strong>{evaluation.missedCount}</strong></span>
+                <span>• Berbeda: <strong>{evaluation.substitutedCount}</strong></span>
+                <span>• Tambahan: <strong>{evaluation.extraCount}</strong></span>
+              </div>
+
+              {/* Panduan Keterangan Warna Status Kata */}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-[var(--text-muted)] border-y border-[var(--border-default)] py-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 rounded-[3px] bg-[var(--status-match-bg)] border border-[var(--status-match)]" />
+                  <strong>Cocok:</strong> Terdeteksi sesuai teks target.
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 rounded-[3px] bg-[var(--status-miss-bg)] border border-[var(--status-miss)]" />
+                  <strong>Terlewat:</strong> Kata target tidak terdeteksi dalam bacaan.
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 rounded-[3px] bg-[var(--status-uncertain-bg)] border border-[var(--status-uncertain)]" />
+                  <strong>Berbeda:</strong> Kata yang terdeteksi berbeda dari target.
+                </span>
+              </div>
+
               <div
                 dir="rtl"
                 lang="ar"
                 className="flex flex-wrap gap-2 rounded-[12px] border border-[var(--border-default)] bg-[var(--bg-canvas)] p-4"
               >
-                {evaluation.wordAlignments.map((item, idx) => (
-                  <span
-                    key={idx}
-                    className={`font-quran rounded-[6px] px-2 py-0.5 text-xl ${
-                      item.status === 'matched'
-                        ? 'bg-[var(--status-match-bg)] text-[var(--status-match)]'
-                        : item.status === 'missed'
-                          ? 'bg-[var(--status-miss-bg)] text-[var(--status-miss)] underline decoration-dashed'
-                          : item.status === 'substituted'
-                            ? 'bg-[var(--status-uncertain-bg)] text-[var(--status-uncertain)]'
-                            : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
-                    }`}
-                    title={`Status: ${item.status}`}
-                  >
-                    {item.expectedWord ?? item.recognizedWord}
-                  </span>
-                ))}
+                {evaluation.wordAlignments.map((item, idx) => {
+                  const statusDesc =
+                    item.status === 'matched'
+                      ? 'Cocok'
+                      : item.status === 'missed'
+                        ? 'Terlewat'
+                        : item.status === 'substituted'
+                          ? 'Berbeda'
+                          : item.status === 'extra'
+                            ? 'Tambahan'
+                            : 'Belum dinilai';
+                  return (
+                    <span
+                      key={idx}
+                      className={`font-quran rounded-[6px] px-2 py-0.5 text-xl ${
+                        item.status === 'matched'
+                          ? 'bg-[var(--status-match-bg)] text-[var(--status-match)]'
+                          : item.status === 'missed'
+                            ? 'bg-[var(--status-miss-bg)] text-[var(--status-miss)] underline decoration-dashed'
+                            : item.status === 'substituted'
+                              ? 'bg-[var(--status-uncertain-bg)] text-[var(--status-uncertain)]'
+                              : 'bg-[var(--bg-subtle)] text-[var(--text-secondary)]'
+                      }`}
+                      title={`Kata: ${item.expectedWord ?? item.recognizedWord} • Status: ${statusDesc}`}
+                      aria-label={`${item.expectedWord ?? item.recognizedWord}: ${statusDesc}`}
+                    >
+                      {item.expectedWord ?? item.recognizedWord}
+                    </span>
+                  );
+                })}
               </div>
+
+              <p className="text-[11px] text-[var(--text-muted)] italic leading-relaxed">
+                * {evaluation.disclaimer}
+              </p>
 
               {resultAudioUrl && (
                 <div className="rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-canvas)] p-3.5 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)]">
                     <Volume2 className="h-4 w-4 text-[var(--accent-primary)]" />
-                    <span>Dengarkan Rekaman Jawaban Anda:</span>
+                    <span>Dengarkan Rekaman Bacaan Anda:</span>
                   </div>
                   <audio
                     controls
@@ -1084,7 +1119,7 @@ export function MemorizationTestPage() {
 
             <div className="rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-subtle)] p-4 space-y-2">
               <p className="text-xs font-semibold text-[var(--text-secondary)] tabular-nums">
-                Ayat Pemantik: Surah{' '}
+                Ayat Pemantik (Soal): Surah{' '}
                 {surahMap.get(selection.promptAyah.surahNumber)?.nameLatin} (
                 {selection.promptAyah.surahNumber}:
                 {selection.promptAyah.ayahNumber}) • Hal. MSI{' '}
@@ -1101,7 +1136,7 @@ export function MemorizationTestPage() {
 
             <div className="space-y-3">
               <p className="text-xs font-semibold text-[var(--text-secondary)]">
-                Urutan Ayat Lanjutan yang Seharusnya:
+                Urutan Ayat Lanjutan yang Seharusnya Dibaca:
               </p>
               {selection.expectedContinuation.map((ayah) => (
                 <div
@@ -1128,7 +1163,7 @@ export function MemorizationTestPage() {
             <div className="rounded-[14px] border border-[var(--border-default)] bg-[var(--bg-surface)] p-5 sm:p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-[var(--text-primary)]">
-                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat Lanjutan' : 'Hasil Kuis Metadata'}
+                  {scopeMode === 'surah' ? 'Hasil Tebak Nomor Ayat Pertama' : 'Hasil Kuis Metadata'}
                 </h3>
                 <span className="tabular-nums text-xs font-semibold text-[var(--accent-primary)]">
                   {scopeMode === 'surah' && metadataResult.guessAyahNumber
@@ -1142,7 +1177,7 @@ export function MemorizationTestPage() {
               <div className="space-y-2.5">
                 {metadataResult.guessSurah && (
                   <div className="flex flex-wrap justify-between gap-2 rounded-[8px] bg-[var(--bg-canvas)] px-3 py-2 text-sm">
-                    <span>Nama Surah</span>
+                    <span>Nama Surah (Ayat Pertama)</span>
                     <span
                       className={
                         metadataResult.guessSurah.isCorrect
@@ -1159,7 +1194,7 @@ export function MemorizationTestPage() {
 
                 {metadataResult.guessPage && (
                   <div className="flex flex-wrap justify-between gap-2 rounded-[8px] bg-[var(--bg-canvas)] px-3 py-2 text-sm">
-                    <span>Halaman MSI</span>
+                    <span>Halaman Mushaf (Ayat Pertama)</span>
                     <span
                       className={
                         metadataResult.guessPage.isCorrect
@@ -1176,7 +1211,7 @@ export function MemorizationTestPage() {
 
                 {metadataResult.guessAyahNumber && (
                   <div className="flex flex-wrap justify-between gap-2 rounded-[8px] bg-[var(--bg-canvas)] px-3 py-2 text-sm">
-                    <span>Nomor Ayat Lanjutan</span>
+                    <span>Nomor Ayat Pertama yang Dibaca</span>
                     <span
                       className={
                         metadataResult.guessAyahNumber.isCorrect
